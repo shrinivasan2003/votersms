@@ -1,0 +1,20 @@
+# API routers package
+from app.api import (
+    auth,
+    voters,
+    users,
+    counties,
+    precincts,
+    sms_templates,
+    sms_jobs,
+    sms_providers,
+    email_providers,
+    whatsapp_providers,
+    dashboard,
+    permissions,
+    roles,
+    email_jobs,
+    whatsapp_templates,
+    whatsapp_jobs,
+    sms_delivery_stats,
+)

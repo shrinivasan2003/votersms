@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+SQLAlchemy
+pymysql
+alembic
+passlib[bcrypt]
+python-dotenv
+PyJWT
+twilio
+httpx

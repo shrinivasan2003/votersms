@@ -1,0 +1,241 @@
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from app.database import SessionLocal
+from app.models import SmsJob, EmailJob, SmsProvider, EmailProvider, Precinct, Voter, SmsTemplate, EmailTemplate
+from twilio.rest import Client
+import httpx
+import logging
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
+
+# ── Shared helper: resolve recipient list ─────────────────────────────────────
+
+def _resolve_voters(db, job, channel: str) -> list:
+    """
+    Returns a list of dicts with at minimum: id, first_name, last_name,
+    plus 'email' or 'phone' depending on channel.
+
+    Resolution priority:
+      1. voter_id   → single recipient
+      2. list_id    → contact-list members
+      3. precinct_id → all active voters in precinct
+      4. (none)     → master list (all active voters)
+    """
+    contact_field = "email" if channel == "email" else "phone"
+
+    voter_id   = getattr(job, 'voter_id',   None)
+    list_id    = getattr(job, 'list_id',    None)
+    precinct_id = job.precinct_id
+
+    if voter_id:
+        rows = db.execute(text(
+            f"SELECT id, first_name, last_name, email, phone "
+            f"FROM voters WHERE id = :vid AND status = 'Active'"
+        ), {"vid": voter_id}).fetchall()
+
+    elif list_id:
+        rows = db.execute(text(
+            f"SELECT v.id, v.first_name, v.last_name, v.email, v.phone "
+            f"FROM list_members lm "
+            f"JOIN voters v ON lm.voter_id = v.id "
+            f"WHERE lm.list_id = :lid "
+            f"  AND v.{contact_field} IS NOT NULL AND v.{contact_field} != '' "
+            f"  AND v.status = 'Active'"
+        ), {"lid": list_id}).fetchall()
+
+    elif precinct_id:
+        rows = db.execute(text(
+            f"SELECT id, first_name, last_name, email, phone "
+            f"FROM voters "
+            f"WHERE precinct_id = :pid "
+            f"  AND {contact_field} IS NOT NULL AND {contact_field} != '' "
+            f"  AND status = 'Active'"
+        ), {"pid": precinct_id}).fetchall()
+
+    else:
+        # Master List — every active voter with the required contact field
+        rows = db.execute(text(
+            f"SELECT id, first_name, last_name, email, phone "
+            f"FROM voters "
+            f"WHERE {contact_field} IS NOT NULL AND {contact_field} != '' "
+            f"  AND status = 'Active'"
+        )).fetchall()
+
+    return [dict(r._mapping) for r in rows]
+
+
+# ── SMS ───────────────────────────────────────────────────────────────────────
+
+def process_sms_job(job_id: int):
+    db = SessionLocal()
+    try:
+        job = db.query(SmsJob).filter(SmsJob.id == job_id).first()
+        if not job or job.status != "Pending":
+            logger.info(f"SMS Job {job_id} not found or not pending.")
+            return
+
+        job.status = "Processing"
+        db.commit()
+
+        provider = db.query(SmsProvider).filter(SmsProvider.id == job.provider_id).first()
+        if not provider:
+            logger.error(f"Provider not found for SMS Job {job_id}")
+            job.status = "Failed"; db.commit(); return
+
+        template = db.query(SmsTemplate).filter(SmsTemplate.id == job.template_id).first()
+        if not template:
+            logger.error(f"Template not found for SMS Job {job_id}")
+            job.status = "Failed"; db.commit(); return
+
+        voters = _resolve_voters(db, job, "sms")
+        twilio_client = Client(provider.account_sid, provider.auth_token)
+        success_count = 0
+        failed_count  = 0
+
+        for voter in voters:
+            body = (
+                template.body
+                .replace("{{first_name}}", voter.get("first_name") or "")
+                .replace("{{last_name}}",  voter.get("last_name")  or "")
+            )
+            try:
+                message = twilio_client.messages.create(
+                    body=body,
+                    from_=provider.from_number,
+                    to=voter["phone"]
+                )
+                logger.info(f"Sent SMS {message.sid} to {voter['phone']}")
+                success_count += 1
+            except Exception as e:
+                logger.error(f"Failed to send SMS to {voter['phone']}: {e}")
+                failed_count += 1
+
+        job.status     = "Completed"
+        job.recipients = success_count + failed_count
+        db.commit()
+
+    except Exception as e:
+        logger.error(f"Error processing SMS job {job_id}: {e}")
+        if 'job' in locals() and job:
+            job.status = "Failed"; db.commit()
+    finally:
+        db.close()
+
+
+# ── Email helpers ─────────────────────────────────────────────────────────────
+
+def _text_to_html(text_body: str) -> str:
+    """Wrap plain text in minimal HTML so Postmark's tracking pixel can be injected."""
+    escaped = (
+        text_body
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+    html_body = escaped.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "<br>\n")
+    return (
+        "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
+        f"<body style='font-family:sans-serif;font-size:15px;line-height:1.6'>"
+        f"{html_body}"
+        "</body></html>"
+    )
+
+
+# ── Email ─────────────────────────────────────────────────────────────────────
+
+def process_email_job(job_id: int):
+    db = SessionLocal()
+    try:
+        job = db.query(EmailJob).filter(EmailJob.id == job_id).first()
+        if not job or job.status != "Pending":
+            logger.info(f"Email Job {job_id} not found or not pending.")
+            return
+
+        job.status = "Processing"
+        db.commit()
+
+        provider = db.query(EmailProvider).filter(EmailProvider.id == job.provider_id).first()
+        if not provider:
+            logger.error(f"Provider not found for Email Job {job_id}")
+            job.status = "Failed"; db.commit(); return
+
+        template = db.query(EmailTemplate).filter(EmailTemplate.id == job.template_id).first()
+        if not template:
+            logger.error(f"Template not found for Email Job {job_id}")
+            job.status = "Failed"; db.commit(); return
+
+        voters = _resolve_voters(db, job, "email")
+
+        postmark_api_url = "https://api.postmarkapp.com/email"
+        http_headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "X-Postmark-Server-Token": provider.smtp_pass,
+        }
+
+        success_count = 0
+        failed_count  = 0
+
+        with httpx.Client() as client:
+            for voter in voters:
+                text_body = (
+                    template.body
+                    .replace("{{first_name}}", voter.get("first_name") or "")
+                    .replace("{{last_name}}",  voter.get("last_name")  or "")
+                )
+                html_body    = _text_to_html(text_body)
+                from_address = (
+                    f"{provider.smtp_user} <{provider.config_email}>"
+                    if provider.smtp_user else provider.config_email
+                )
+                subject = getattr(template, "subject", None) or template.name
+
+                payload = {
+                    "From":          from_address,
+                    "To":            voter["email"],
+                    "Subject":       subject,
+                    "TextBody":      text_body,
+                    "HtmlBody":      html_body,
+                    "MessageStream": "broadcast",
+                    "TrackOpens":    True,
+                    "TrackLinks":    "HtmlAndText",
+                }
+
+                try:
+                    response = client.post(postmark_api_url, json=payload, headers=http_headers)
+                    if response.status_code == 200:
+                        resp_data  = response.json()
+                        message_id = resp_data.get("MessageID")
+                        if message_id:
+                            db.execute(text("""
+                                INSERT IGNORE INTO email_job_messages
+                                    (job_id, voter_id, postmark_message_id, recipient_email)
+                                VALUES (:job_id, :voter_id, :mid, :email)
+                            """), {
+                                "job_id":   job_id,
+                                "voter_id": voter["id"],
+                                "mid":      message_id,
+                                "email":    voter["email"],
+                            })
+                            db.commit()
+                        success_count += 1
+                        logger.info(f"Sent email to {voter['email']} (MessageID: {message_id})")
+                    else:
+                        logger.error(f"Postmark error {response.status_code}: {response.text}")
+                        failed_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to send email to {voter['email']}: {e}")
+                    failed_count += 1
+
+        job.status     = "Completed"
+        job.recipients = success_count + failed_count
+        db.commit()
+
+    except Exception as e:
+        logger.error(f"Error processing Email job {job_id}: {e}")
+        if "job" in locals() and job:
+            job.status = "Failed"; db.commit()
+    finally:
+        db.close()
