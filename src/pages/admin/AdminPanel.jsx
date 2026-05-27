@@ -239,7 +239,10 @@ function MonitorUsageTab({ getAuthHeaders }) {
   const doAction = async (userId, action) => {
     setActionLoading(userId + action);
     try {
-      const res = await fetch(`/api/customers/users/${userId}/${action}`, {
+      const url = action === 'delete'
+        ? `/api/customers/users/${userId}`
+        : `/api/customers/users/${userId}/${action}`;
+      const res = await fetch(url, {
         method: action === 'delete' ? 'DELETE' : 'PATCH',
         headers: getAuthHeaders(),
       });
