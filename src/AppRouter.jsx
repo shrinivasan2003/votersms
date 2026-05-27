@@ -6,10 +6,8 @@ import AppLayout from './components/layout/AppLayout';
 // Pages
 import Login from './pages/auth/Login';
 import Dashboard from './pages/Dashboard';
-import Counties from './pages/masters/Counties';
-import Precincts from './pages/masters/Precincts';
+import Organization from './pages/masters/Organization';
 import Voters from './pages/masters/Voters';
-import Lists from './pages/masters/Lists';
 import SmsTemplates from './pages/masters/SmsTemplates';
 import EmailTemplates from './pages/masters/EmailTemplates';
 import WhatsappTemplates from './pages/masters/WhatsappTemplates';
@@ -46,11 +44,9 @@ const AppRouter = () => {
           <Route path="dashboard" element={<Dashboard />} />
           
           {/* Masters */}
-          <Route path="counties" element={<Counties />} />
-          <Route path="precincts" element={<Precincts />} />
+          <Route path="organization" element={<Organization />} />
           <Route path="voters" element={<Voters />} />
           <Route path="recipients" element={<Voters />} />
-          <Route path="lists" element={<Lists />} />
           <Route path="sms-templates" element={<SmsTemplates />} />
           <Route path="email-templates" element={<EmailTemplates />} />
           <Route path="whatsapp-templates" element={<WhatsappTemplates />} />

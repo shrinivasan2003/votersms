@@ -3,10 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import {
-  Home, MapPin, Building2, Users, MessageSquare, Mail,
+  Home, Building2, Users, MessageSquare, Mail,
   MessageCircle, Radio, AtSign, Phone, Send, MailOpen,
   Play, FileText, Shield, Key, KeyRound,
-  ChevronDown, ChevronRight, Package, RefreshCw, ListChecks
+  ChevronDown, ChevronRight, Package, RefreshCw
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, isCollapsed, onItemClick }) => (
@@ -76,7 +76,7 @@ const Sidebar = ({ isCollapsed, onItemClick, onExpand }) => {
 
   // Auto-expand group if child is active
   useEffect(() => {
-    if (['/counties', '/precincts', '/recipients', '/voters', '/lists', '/sms-templates', '/email-templates', '/whatsapp-templates', '/sms-providers', '/email-providers', '/whatsapp-providers'].includes(location.pathname)) {
+    if (['/organization', '/recipients', '/voters', '/sms-templates', '/email-templates', '/whatsapp-templates', '/sms-providers', '/email-providers', '/whatsapp-providers'].includes(location.pathname)) {
       setOpenGroup('Masters');
     } else if (['/sms-jobs', '/email-jobs', '/whatsapp-jobs', '/process-job'].includes(location.pathname)) {
       setOpenGroup('Transactions');
@@ -132,10 +132,8 @@ const Sidebar = ({ isCollapsed, onItemClick, onExpand }) => {
             onToggle={() => handleToggle('Masters')}
             onExpand={onExpand}
           >
-            <NavItem to="/counties" icon={MapPin} label="Counties" isCollapsed={isCollapsed} onItemClick={onItemClick} />
-            <NavItem to="/precincts" icon={Building2} label="Precincts" isCollapsed={isCollapsed} onItemClick={onItemClick} />
+            <NavItem to="/organization" icon={Building2} label="Organization" isCollapsed={isCollapsed} onItemClick={onItemClick} />
             <NavItem to="/recipients" icon={Users} label="Recipients" isCollapsed={isCollapsed} onItemClick={onItemClick} />
-            <NavItem to="/lists" icon={ListChecks} label="Lists" isCollapsed={isCollapsed} onItemClick={onItemClick} />
             <NavItem to="/sms-templates" icon={MessageSquare} label="SMS Templates" isCollapsed={isCollapsed} onItemClick={onItemClick} />
             <NavItem to="/email-templates" icon={Mail} label="Email Templates" isCollapsed={isCollapsed} onItemClick={onItemClick} />
             <NavItem to="/whatsapp-templates" icon={MessageCircle} label="WhatsApp Templates" isCollapsed={isCollapsed} onItemClick={onItemClick} />

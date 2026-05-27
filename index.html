@@ -1,16 +1,73 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="h-full overflow-x-hidden">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/jpeg" href="/favicon.jpg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <title>BallotDA - Civic Engagement Portal</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.webp" />
+    <link rel="alternate icon" href="/favicon.webp" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+
+    <!-- SEO Meta Tags -->
+    <title>BallotDA – Civic Engagement Portal</title>
+    <meta name="description" content="BallotDA is a civic engagement platform that helps election officials manage precincts, voters, SMS/Email messaging, and real‑time election dashboards." />
+    <meta name="keywords" content="civic engagement, voter management, election dashboard, SMS outreach, email outreach, contact lists, precincts" />
+    <meta name="author" content="BallotDA Team" />
+    <link rel="canonical" href="https://votersms.ballotda.com/" />
+
+    <!-- Open Graph / Social Sharing -->
+    <meta property="og:title" content="BallotDA – Civic Engagement Portal" />
+    <meta property="og:description" content="Manage voters, dispatch SMS/Email campaigns." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://votersms.ballotda.com/" />
+    <meta property="og:image" content="https://votersms.ballotda.com/og-image.jpg" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="BallotDA – Civic Engagement Portal" />
+    <meta name="twitter:description" content="Manage voters, dispatch SMS/Email campaigns." />
+    <meta name="twitter:image" content="https://votersms.ballotda.com/og-image.jpg" />
+
+    <!-- Security Headers (must also be set via HTTP response headers) -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
+    <meta http-equiv="Permissions-Policy" content="geolocation=(), microphone=(), camera=()" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' http://localhost:* https://localhost:* http://127.0.0.1:* https://127.0.0.1:* http://votersms.ballotda.com https://votersms.ballotda.com http://*.ballotda.com https://*.ballotda.com; base-uri 'self'; form-action 'self';" />
+
+    <!-- JSON‑LD Structured Data (Organization) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "BallotDA",
+      "url": "https://votersms.ballotda.com/",
+      "logo": "https://votersms.ballotda.com/logo.png",
+      "sameAs": [
+        "https://twitter.com/ballotda",
+        "https://www.facebook.com/ballotda",
+        "https://www.linkedin.com/company/ballotda"
+      ]
+    }
+    </script>
+
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow-x: hidden;
+        width: 100%;
+      }
+      #root {
+        height: 100%;
+        overflow-x: hidden;
+        width: 100%;
+      }
+    </style>
+    + <script type="module" src="/src/main.jsx"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-Orlel9lK.js">
   </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+  <body class="h-full overflow-x-hidden">
+    <div id="root" class="h-full overflow-x-hidden"></div>
   </body>
 </html>

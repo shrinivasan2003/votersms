@@ -17,30 +17,27 @@ const RecipientCell = ({ row }) => {
 const WhatsappJobs = () => {
   const [view, setView]           = useState('list');
   const [jobs, setJobs]           = useState([]);
-  const [precincts, setPrecincts] = useState([]);
   const [lists, setLists]         = useState([]);
   const [templates, setTemplates] = useState([]);
   const [providers, setProviders] = useState([]);
   const [loading, setLoading]     = useState(false);
-  const [recipient, setRecipient] = useState({ type: 'precinct', precinct_id: null, list_id: null, voter_id: null });
+  const [recipient, setRecipient] = useState({ type: 'list', precinct_id: null, list_id: null, voter_id: null });
 
   const API_URL = '/api/whatsapp-jobs';
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [jobsRes, precinctsRes, listsRes, templatesRes, providersRes] = await Promise.all([
+      const [jobsRes, listsRes, templatesRes, providersRes] = await Promise.all([
         fetch(API_URL),
-        fetch('/api/precincts'),
         fetch('/api/contact-lists'),
         fetch('/api/whatsapp-templates'),
         fetch('/api/whatsapp-providers'),
       ]);
-      const [jobsData, precinctsData, listsData, templatesData, providersData] = await Promise.all([
-        jobsRes.json(), precinctsRes.json(), listsRes.json(), templatesRes.json(), providersRes.json(),
+      const [jobsData, listsData, templatesData, providersData] = await Promise.all([
+        jobsRes.json(), listsRes.json(), templatesRes.json(), providersRes.json(),
       ]);
       setJobs(Array.isArray(jobsData)           ? jobsData      : []);
-      setPrecincts(Array.isArray(precinctsData) ? precinctsData : []);
       setLists(Array.isArray(listsData)         ? listsData     : []);
       setTemplates(Array.isArray(templatesData) ? templatesData : []);
       setProviders(Array.isArray(providersData) ? providersData : []);
@@ -130,7 +127,6 @@ const WhatsappJobs = () => {
 
             {/* Recipient source */}
             <RecipientPicker
-              precincts={precincts}
               lists={lists}
               channel="whatsapp"
               value={recipient}

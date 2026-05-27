@@ -17,7 +17,6 @@ const RecipientCell = ({ row }) => {
 const EmailJobs = () => {
   const [view, setView]           = useState('list');
   const [jobs, setJobs]           = useState([]);
-  const [precincts, setPrecincts] = useState([]);
   const [lists, setLists]         = useState([]);
   const [templates, setTemplates] = useState([]);
   const [providers, setProviders] = useState([]);
@@ -29,18 +28,16 @@ const EmailJobs = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [jobsRes, precinctsRes, listsRes, templatesRes, providersRes] = await Promise.all([
+      const [jobsRes, listsRes, templatesRes, providersRes] = await Promise.all([
         fetch(API_URL),
-        fetch('/api/precincts-detailed'),
         fetch('/api/contact-lists'),
         fetch('/api/email-templates'),
         fetch('/api/email-providers'),
       ]);
-      const [jobsData, precinctsData, listsData, templatesData, providersData] = await Promise.all([
-        jobsRes.json(), precinctsRes.json(), listsRes.json(), templatesRes.json(), providersRes.json(),
+      const [jobsData, listsData, templatesData, providersData] = await Promise.all([
+        jobsRes.json(), listsRes.json(), templatesRes.json(), providersRes.json(),
       ]);
       setJobs(Array.isArray(jobsData)           ? jobsData       : []);
-      setPrecincts(Array.isArray(precinctsData) ? precinctsData  : []);
       setLists(Array.isArray(listsData)         ? listsData      : []);
       setTemplates(Array.isArray(templatesData) ? templatesData  : []);
       setProviders(Array.isArray(providersData) ? providersData  : []);
@@ -130,7 +127,6 @@ const EmailJobs = () => {
 
             {/* Recipient source — defaults to List tab for email */}
             <RecipientPicker
-              precincts={precincts}
               lists={lists}
               channel="email"
               value={recipient}

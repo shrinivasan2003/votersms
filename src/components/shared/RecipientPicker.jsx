@@ -1,31 +1,28 @@
 /**
  * RecipientPicker — reusable recipient-source selector used in SMS, Email, and WhatsApp job forms.
  *
- * Three modes (tab-switched):
- *   • Precinct   — dropdown of precincts
+ * Two modes (tab-switched):
  *   • List       — dropdown of contact lists (includes "Master List / All" option)
  *   • Individual — live search → select a single recipient
  *
  * Props:
- *   precincts  — array from /api/precincts
  *   lists      — array from /api/contact-lists
  *   channel    — 'sms' | 'email' | 'whatsapp'  (controls search-result sub-label)
- *   value      — { type, precinct_id, list_id, voter_id, label }
+ *   value      — { type, list_id, voter_id, label }
  *   onChange   — (value) => void
  */
 import { useState, useEffect } from 'react';
-import { Building2, ListChecks, User, Search, RefreshCw, X, Star } from 'lucide-react';
+import { ListChecks, User, Search, RefreshCw, X } from 'lucide-react';
 
 const MODES = [
-  { key: 'precinct',   label: 'Precinct',   Icon: Building2   },
   { key: 'list',       label: 'List',       Icon: ListChecks  },
   { key: 'individual', label: 'Individual', Icon: User        },
 ];
 
-const EMPTY = { type: 'precinct', precinct_id: null, list_id: null, voter_id: null, label: '' };
+const EMPTY = { type: 'list', precinct_id: null, list_id: null, voter_id: null, label: '' };
 
-export default function RecipientPicker({ precincts = [], lists = [], channel = 'sms', value, onChange }) {
-  const [mode, setMode]               = useState(value?.type || 'precinct');
+export default function RecipientPicker({ lists = [], channel = 'sms', value, onChange }) {
+  const [mode, setMode]               = useState(value?.type === 'individual' ? 'individual' : 'list');
   const [voterSearch, setVoterSearch] = useState('');
   const [results, setResults]         = useState([]);
   const [searching, setSearching]     = useState(false);
@@ -103,28 +100,6 @@ export default function RecipientPicker({ precincts = [], lists = [], channel = 
           </button>
         ))}
       </div>
-
-      {/* ── Precinct dropdown ── */}
-      {mode === 'precinct' && (
-        <div className="relative">
-          <select
-            className="block w-full rounded-lg border border-brand-border px-4 py-3 outline-none
-              focus:border-brand-blue focus:ring-1 focus:ring-brand-blue bg-white appearance-none transition-all"
-            defaultValue=""
-            onChange={e => {
-              const opt = e.target.options[e.target.selectedIndex];
-              onChange({ type: 'precinct', precinct_id: e.target.value || null,
-                         list_id: null, voter_id: null, label: opt.text });
-            }}
-          >
-            <option value="">Select Precinct</option>
-            {precincts.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          <ChevronIcon />
-        </div>
-      )}
 
       {/* ── List dropdown ── */}
       {mode === 'list' && (

@@ -5,9 +5,33 @@ from app.models import SmsJob, EmailJob, SmsProvider, EmailProvider, Precinct, V
 from twilio.rest import Client
 import httpx
 import logging
+import re
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+# ── Phone number normalisation ────────────────────────────────────────────────
+
+def _normalize_phone(raw: str) -> str:
+    """
+    Strip formatting characters from a phone number and ensure it starts with +.
+    Numbers should be stored with the full country code (e.g. +919876543210).
+    """
+    if not raw:
+        return raw
+
+    # Remove spaces, dashes, dots, parentheses — keep digits and leading +
+    stripped = re.sub(r"[^\d+]", "", raw.strip())
+
+    if not stripped:
+        return raw
+
+    # Already E.164
+    if stripped.startswith("+"):
+        return stripped
+
+    # Has digits but no + — add it
+    return f"+{stripped}"
 
 
 # ── Shared helper: resolve recipient list ─────────────────────────────────────
@@ -90,11 +114,21 @@ def process_sms_job(job_id: int):
             job.status = "Failed"; db.commit(); return
 
         voters = _resolve_voters(db, job, "sms")
+
+        if not voters:
+            logger.warning(f"SMS Job {job_id}: no recipients resolved — marking Failed")
+            job.status = "Failed"
+            db.commit()
+            return
+
         twilio_client = Client(provider.account_sid, provider.auth_token)
         success_count = 0
         failed_count  = 0
 
         for voter in voters:
+            raw_phone      = voter.get("phone", "") or ""
+            e164_phone     = _normalize_phone(raw_phone)
+
             body = (
                 template.body
                 .replace("{{first_name}}", voter.get("first_name") or "")
@@ -104,16 +138,26 @@ def process_sms_job(job_id: int):
                 message = twilio_client.messages.create(
                     body=body,
                     from_=provider.from_number,
-                    to=voter["phone"]
+                    to=e164_phone
                 )
-                logger.info(f"Sent SMS {message.sid} to {voter['phone']}")
+                logger.info(f"SMS Job {job_id}: sent {message.sid} to {e164_phone} (raw: {raw_phone})")
                 success_count += 1
             except Exception as e:
-                logger.error(f"Failed to send SMS to {voter['phone']}: {e}")
+                logger.error(f"SMS Job {job_id}: FAILED to send to {e164_phone} (raw: {raw_phone}): {e}")
                 failed_count += 1
 
-        job.status     = "Completed"
-        job.recipients = success_count + failed_count
+        total = success_count + failed_count
+        if success_count == 0:
+            job.status = "Failed"
+            logger.error(f"SMS Job {job_id}: all {total} message(s) failed — marked Failed")
+        else:
+            job.status = "Completed"
+            if failed_count:
+                logger.warning(f"SMS Job {job_id}: {success_count}/{total} sent, {failed_count} failed")
+            else:
+                logger.info(f"SMS Job {job_id}: all {total} message(s) sent successfully")
+
+        job.recipients = total
         db.commit()
 
     except Exception as e:

@@ -19,13 +19,12 @@ const RecipientCell = ({ row }) => {
 const SmsJobs = () => {
   const [view, setView]             = useState('list');
   const [jobs, setJobs]             = useState([]);
-  const [precincts, setPrecincts]   = useState([]);
   const [lists, setLists]           = useState([]);
   const [templates, setTemplates]   = useState([]);
   const [providers, setProviders]   = useState([]);
   const [loading, setLoading]       = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
-  const [recipient, setRecipient]   = useState({ type: 'precinct', precinct_id: null, list_id: null, voter_id: null });
+  const [recipient, setRecipient]   = useState({ type: 'list', precinct_id: null, list_id: null, voter_id: null });
   const { getAuthHeaders, user }    = useAuth();
 
   const API_URL = '/api/sms-jobs';
@@ -33,21 +32,19 @@ const SmsJobs = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [jobsRes, precinctsRes, listsRes, templatesRes, providersRes] = await Promise.all([
+      const [jobsRes, listsRes, templatesRes, providersRes] = await Promise.all([
         fetch(API_URL),
-        fetch('/api/precincts-detailed'),
         fetch('/api/contact-lists'),
         fetch('/api/sms-templates'),
         fetch('/api/sms-providers'),
       ]);
-      const [jobsData, precinctsData, listsData, templatesData, providersData] = await Promise.all([
-        jobsRes.json(), precinctsRes.json(), listsRes.json(), templatesRes.json(), providersRes.json(),
+      const [jobsData, listsData, templatesData, providersData] = await Promise.all([
+        jobsRes.json(), listsRes.json(), templatesRes.json(), providersRes.json(),
       ]);
-      setJobs(Array.isArray(jobsData)       ? jobsData       : []);
-      setPrecincts(Array.isArray(precinctsData) ? precinctsData : []);
-      setLists(Array.isArray(listsData)     ? listsData     : []);
-      setTemplates(Array.isArray(templatesData) ? templatesData : []);
-      setProviders(Array.isArray(providersData) ? providersData : []);
+      setJobs(Array.isArray(jobsData)           ? jobsData       : []);
+      setLists(Array.isArray(listsData)         ? listsData      : []);
+      setTemplates(Array.isArray(templatesData) ? templatesData  : []);
+      setProviders(Array.isArray(providersData) ? providersData  : []);
     } catch (err) {
       console.error('Failed to fetch data:', err);
     } finally {
@@ -134,7 +131,6 @@ const SmsJobs = () => {
 
             {/* Recipient source */}
             <RecipientPicker
-              precincts={precincts}
               lists={lists}
               channel="sms"
               value={recipient}
