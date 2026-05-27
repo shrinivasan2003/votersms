@@ -49,7 +49,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    return UserOut.from_orm(user)
+    out = UserOut.from_orm(user)
+    # customer_id may not be on the ORM object if not yet reflected; fall back to token payload
+    if out.customer_id is None:
+        out.customer_id = payload.get("customer_id")
+    return out
 
 def require_role(role_name: str):
     def role_checker(current_user: UserOut = Depends(get_current_user)):

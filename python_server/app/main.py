@@ -1,6 +1,8 @@
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 # Import routers
 from app.api import (
@@ -25,10 +27,45 @@ from app.api import (
     email_webhooks,
     email_analytics,
     contact_lists,
+    customers,
 )
 from app.dependencies.security import get_current_user
+from app.database import SessionLocal
+from app.utils.password import hash_password
 
-app = FastAPI()
+
+def _ensure_admin_user() -> None:
+    """Ensure the platform admin user exists in the DB on startup.
+    Credentials are read from env vars — never hardcoded in the frontend.
+    """
+    admin_username = os.getenv("ADMIN_USERNAME", "admin")
+    admin_password = os.getenv("ADMIN_PASSWORD", "admin123")
+    db = SessionLocal()
+    try:
+        row = db.execute(
+            text("SELECT id, password FROM users WHERE username=:u AND customer_id IS NULL"),
+            {"u": admin_username},
+        ).first()
+        if not row:
+            db.execute(
+                text(
+                    "INSERT INTO users (username, password, name, role, status) "
+                    "VALUES (:u, :p, 'Platform Admin', 'admin', 'Active')"
+                ),
+                {"u": admin_username, "p": hash_password(admin_password)},
+            )
+            db.commit()
+    finally:
+        db.close()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _ensure_admin_user()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # In production set ALLOWED_ORIGINS in .env to your actual frontend domain(s).
@@ -71,6 +108,7 @@ app.include_router(sms_delivery_stats.router, prefix="/api", dependencies=_prote
 app.include_router(process_jobs.router,     prefix="/api", dependencies=_protected)
 app.include_router(email_analytics.router,  prefix="/api", dependencies=_protected)
 app.include_router(contact_lists.router,    prefix="/api", dependencies=_protected)
+app.include_router(customers.router,        prefix="/api", dependencies=_protected)
 
 # Root
 @app.get("/")

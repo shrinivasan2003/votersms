@@ -7,17 +7,12 @@ GET /api/email-analytics/{job_id} — detailed stats + recent event feed for one
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+
+from app.database import get_db
+from app.schemas import UserOut
+from app.dependencies.security import get_current_user
 
 router = APIRouter()
-
-
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def _calc_rates(row: dict) -> dict:
@@ -33,17 +28,17 @@ def _calc_rates(row: dict) -> dict:
 
 
 @router.get("/email-analytics")
-def list_email_analytics(db: Session = Depends(_get_session)):
-    """
-    Returns one row per email job enriched with open/click/bounce analytics
-    pulled from email_job_messages + email_events.
-    Falls back to basic job list if analytics tables don't exist yet.
-    """
+def list_email_analytics(
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user),
+):
+    cid = current_user.customer_id
+    cid_filter = "WHERE ej.customer_id=:cid" if cid is not None else ""
+    params = {"cid": cid} if cid is not None else {}
     try:
-        result = db.execute(text("""
+        result = db.execute(text(f"""
             SELECT
                 ej.id                                                       AS job_id,
-                p.name                                                      AS precinct_name,
                 et.name                                                     AS template_name,
                 ep.name                                                     AS provider_name,
                 ej.status,
@@ -58,42 +53,43 @@ def list_email_analytics(db: Session = Depends(_get_session)):
                 SUM(CASE WHEN ee.event_type='bounce'  THEN 1 ELSE 0 END)   AS bounces,
                 SUM(CASE WHEN ee.event_type='spam'    THEN 1 ELSE 0 END)   AS spam_complaints
             FROM email_jobs ej
-            LEFT JOIN precincts       p   ON ej.precinct_id  = p.id
             LEFT JOIN email_templates et  ON ej.template_id  = et.id
             LEFT JOIN email_providers ep  ON ej.provider_id  = ep.id
             LEFT JOIN email_job_messages ejm ON ej.id        = ejm.job_id
             LEFT JOIN email_events    ee  ON ejm.postmark_message_id = ee.postmark_message_id
-            GROUP BY ej.id, p.name, et.name, ep.name, ej.status, ej.created_at
+            {cid_filter}
+            GROUP BY ej.id, et.name, ep.name, ej.status, ej.created_at
             ORDER BY ej.id DESC
-        """))
-        rows = [_calc_rates(dict(r._mapping)) for r in result]
-        return rows
+        """), params)
+        return [_calc_rates(dict(r._mapping)) for r in result]
     except Exception as e:
         err_str = str(e).lower()
-        # If analytics tables haven't been created yet, return basic job data with zero stats
         if "doesn't exist" in err_str or "no such table" in err_str or "1146" in err_str:
             try:
-                fallback = db.execute(text("""
-                    SELECT ej.id AS job_id, p.name AS precinct_name,
+                fallback = db.execute(text(f"""
+                    SELECT ej.id AS job_id,
                            et.name AS template_name, ep.name AS provider_name,
                            ej.status, ej.created_at,
                            0 AS total_sent, 0 AS unique_opens, 0 AS total_opens,
                            0 AS unique_clicks, 0 AS total_clicks, 0 AS bounces, 0 AS spam_complaints
                     FROM email_jobs ej
-                    LEFT JOIN precincts       p  ON ej.precinct_id = p.id
                     LEFT JOIN email_templates et ON ej.template_id = et.id
                     LEFT JOIN email_providers ep ON ej.provider_id = ep.id
+                    {cid_filter}
                     ORDER BY ej.id DESC
-                """))
-                rows = [_calc_rates(dict(r._mapping)) for r in fallback]
-                return rows
+                """), params)
+                return [_calc_rates(dict(r._mapping)) for r in fallback]
             except Exception:
                 return []
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/email-analytics/{job_id}")
-def get_email_analytics_detail(job_id: int, db: Session = Depends(_get_session)):
+def get_email_analytics_detail(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user),
+):
     """
     Detailed analytics for a single job:
       • summary stats

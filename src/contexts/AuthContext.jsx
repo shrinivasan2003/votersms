@@ -27,7 +27,7 @@ export const AuthProvider = ({ children }) => {
         setAuthToken(access_token);
         localStorage.setItem('auth_token', access_token);
       }
-      return true;
+      return userData;
     } else {
       const error = await res.json();
       throw new Error(error.detail || error.message || 'Login failed');

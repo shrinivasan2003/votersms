@@ -27,10 +27,12 @@ EmailProvider = AutomapBase.classes.email_providers
 WhatsappProvider = AutomapBase.classes.whatsapp_providers
 Permission = AutomapBase.classes.permissions
 Role = AutomapBase.classes.roles
+Customer = AutomapBase.classes.customers
 
 # Export the Base so Alembic can discover the metadata
 __all__ = [
     "Base",
+    "Customer",
     "User",
     "County",
     "Precinct",

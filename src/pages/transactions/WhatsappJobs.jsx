@@ -9,9 +9,7 @@ const RecipientCell = ({ row }) => {
     return <span className="font-medium text-brand-textPrimary">{row.voter_name}</span>;
   if (row.list_name)
     return <span className="text-brand-textPrimary">📋 {row.list_name}</span>;
-  if (row.precinct_name)
-    return <span className="text-brand-textPrimary">{row.precinct_name}</span>;
-  return <span className="italic text-brand-textMuted">Master List</span>;
+  return <span className="italic text-brand-textMuted">All Recipients</span>;
 };
 
 const WhatsappJobs = () => {

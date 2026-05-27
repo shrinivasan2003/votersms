@@ -3,6 +3,8 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
+from app.dependencies.security import get_current_user
+from app.schemas import UserOut
 
 router = APIRouter()
 
@@ -14,41 +16,56 @@ def _get_session():
         db.close()
 
 @router.get("/voters")
-def get_voters(search: Optional[str] = Query(None), db: Session = Depends(_get_session)):
+def get_voters(
+    search: Optional[str] = Query(None),
+    db: Session = Depends(_get_session),
+    current_user: UserOut = Depends(get_current_user),
+):
     try:
+        cid = current_user.customer_id
         if search:
             q = f"%{search}%"
-            result = db.execute(text("""
+            cid_filter = "AND v.customer_id=:cid" if cid else ""
+            result = db.execute(text(f"""
                 SELECT v.*, p.name as precinct_name
                 FROM voters v
                 LEFT JOIN precincts p ON v.precinct_id = p.id
-                WHERE v.first_name LIKE :q OR v.last_name LIKE :q
+                WHERE (v.first_name LIKE :q OR v.last_name LIKE :q
                    OR v.email LIKE :q OR v.phone LIKE :q
-                   OR CONCAT(v.first_name, ' ', v.last_name) LIKE :q
+                   OR CONCAT(v.first_name, ' ', v.last_name) LIKE :q)
+                {cid_filter}
                 ORDER BY v.first_name, v.last_name
                 LIMIT 50
-            """), {"q": q})
+            """), {"q": q, "cid": cid} if cid else {"q": q})
         else:
-            result = db.execute(text("""
+            cid_filter = "WHERE v.customer_id=:cid" if cid else ""
+            result = db.execute(text(f"""
                 SELECT v.*, p.name as precinct_name
                 FROM voters v
                 LEFT JOIN precincts p ON v.precinct_id = p.id
+                {cid_filter}
                 ORDER BY v.id DESC
-            """))
+            """), {"cid": cid} if cid else {})
         return [dict(row._mapping) for row in result]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/voters")
-def create_voter(req: Dict[str, Any] = Body(...), db: Session = Depends(_get_session)):
+def create_voter(
+    req: Dict[str, Any] = Body(...),
+    db: Session = Depends(_get_session),
+    current_user: UserOut = Depends(get_current_user),
+):
     try:
         result = db.execute(
-            text("INSERT INTO voters (first_name, last_name, email, phone, precinct_id, status) VALUES (:first_name, :last_name, :email, :phone, :precinct_id, :status)"),
+            text("INSERT INTO voters (first_name, last_name, email, phone, precinct_id, status, customer_id) "
+                 "VALUES (:first_name, :last_name, :email, :phone, :precinct_id, :status, :customer_id)"),
             {
-                "first_name": req.get('first_name'), "last_name": req.get('last_name'), 
-                "email": req.get('email'), "phone": req.get('phone'), 
-                "precinct_id": req.get('precinct_id'), "status": req.get('status', 'Active')
-            }
+                "first_name": req.get('first_name'), "last_name": req.get('last_name'),
+                "email": req.get('email'), "phone": req.get('phone'),
+                "precinct_id": req.get('precinct_id'), "status": req.get('status', 'Active'),
+                "customer_id": current_user.customer_id,
+            },
         )
         db.commit()
         return {"id": result.lastrowid, **req}
@@ -57,15 +74,23 @@ def create_voter(req: Dict[str, Any] = Body(...), db: Session = Depends(_get_ses
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/voters/{id}")
-def update_voter(id: int, req: Dict[str, Any] = Body(...), db: Session = Depends(_get_session)):
+def update_voter(
+    id: int,
+    req: Dict[str, Any] = Body(...),
+    db: Session = Depends(_get_session),
+    current_user: UserOut = Depends(get_current_user),
+):
     try:
+        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
         db.execute(
-            text("UPDATE voters SET first_name=:first_name, last_name=:last_name, email=:email, phone=:phone, precinct_id=:precinct_id, status=:status WHERE id=:id"),
+            text(f"UPDATE voters SET first_name=:first_name, last_name=:last_name, "
+                 f"email=:email, phone=:phone, precinct_id=:precinct_id, status=:status WHERE {where}"),
             {
-                "first_name": req.get('first_name'), "last_name": req.get('last_name'), 
-                "email": req.get('email'), "phone": req.get('phone'), 
-                "precinct_id": req.get('precinct_id'), "status": req.get('status'), "id": id
-            }
+                "first_name": req.get('first_name'), "last_name": req.get('last_name'),
+                "email": req.get('email'), "phone": req.get('phone'),
+                "precinct_id": req.get('precinct_id'), "status": req.get('status'),
+                "id": id, "cid": current_user.customer_id,
+            },
         )
         db.commit()
         return {"message": "Updated successfully"}
@@ -74,9 +99,14 @@ def update_voter(id: int, req: Dict[str, Any] = Body(...), db: Session = Depends
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/voters/{id}")
-def delete_voter(id: int, db: Session = Depends(_get_session)):
+def delete_voter(
+    id: int,
+    db: Session = Depends(_get_session),
+    current_user: UserOut = Depends(get_current_user),
+):
     try:
-        db.execute(text("DELETE FROM voters WHERE id=:id"), {"id": id})
+        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
+        db.execute(text(f"DELETE FROM voters WHERE {where}"), {"id": id, "cid": current_user.customer_id})
         db.commit()
         return {"message": "Deleted successfully"}
     except Exception as e:
@@ -84,11 +114,20 @@ def delete_voter(id: int, db: Session = Depends(_get_session)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/voters/bulk")
-def bulk_voters_upload(voters: List[Dict[str, Any]] = Body(...), db: Session = Depends(_get_session)):
+def bulk_voters_upload(
+    voters: List[Dict[str, Any]] = Body(...),
+    db: Session = Depends(_get_session),
+    current_user: UserOut = Depends(get_current_user),
+):
     if not voters:
         raise HTTPException(status_code=400, detail={'message': 'No voter data provided'})
     try:
-        precincts_result = db.execute(text("SELECT id, name, code FROM precincts"))
+        cid = current_user.customer_id
+        cid_filter = "AND customer_id=:cid" if cid else ""
+        precincts_result = db.execute(
+            text(f"SELECT id, name, code FROM precincts WHERE 1=1 {cid_filter}"),
+            {"cid": cid} if cid else {},
+        )
         precincts = [dict(row._mapping) for row in precincts_result]
         precinct_map = {}
         for p in precincts:
@@ -107,14 +146,16 @@ def bulk_voters_upload(voters: List[Dict[str, Any]] = Body(...), db: Session = D
                     "last_name": v.get('last_name', ''),
                     "email": v.get('email', None),
                     "phone": v.get('phone', None),
-                    "status": v.get('status', 'Active')
+                    "status": v.get('status', 'Active'),
+                    "customer_id": cid,
                 })
         if not values:
-            raise HTTPException(status_code=400, detail={'message': 'No valid precincts found in the data. Please ensure precinct_id matches an existing Precinct ID, Name, or Code.'})
-        
+            raise HTTPException(status_code=400, detail={'message': 'No valid precincts found in the data.'})
+
         result = db.execute(
-            text("INSERT INTO voters (precinct_id, first_name, last_name, email, phone, status) VALUES (:precinct_id, :first_name, :last_name, :email, :phone, :status)"),
-            values
+            text("INSERT INTO voters (precinct_id, first_name, last_name, email, phone, status, customer_id) "
+                 "VALUES (:precinct_id, :first_name, :last_name, :email, :phone, :status, :customer_id)"),
+            values,
         )
         db.commit()
         inserted_count = result.rowcount
@@ -122,7 +163,7 @@ def bulk_voters_upload(voters: List[Dict[str, Any]] = Body(...), db: Session = D
             "message": "Bulk upload successful",
             "total": len(voters),
             "inserted": inserted_count,
-            "failed": len(voters) - inserted_count
+            "failed": len(voters) - inserted_count,
         }
     except Exception as e:
         db.rollback()

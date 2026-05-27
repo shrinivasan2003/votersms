@@ -3,6 +3,8 @@ from typing import Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
+from app.dependencies.security import get_current_user
+from app.schemas import UserOut
 
 router = APIRouter()
 
@@ -13,30 +15,39 @@ def _get_session():
     finally:
         db.close()
 
-
-# ── Safe fields returned to the frontend (smtp_pass is never exposed) ─────────
-_SAFE_FIELDS = "id, code, name, type, smtp_host, smtp_port, smtp_user, config_email, status"
+_SAFE_FIELDS = "id, code, name, type, smtp_host, smtp_port, smtp_user, config_email, status, customer_id"
 
 
 @router.get("/email-providers")
-def get_email_providers(db: Session = Depends(_get_session)):
+def get_email_providers(
+    db: Session = Depends(_get_session),
+    current_user: UserOut = Depends(get_current_user),
+):
     try:
-        result = db.execute(text(
-            f"SELECT {_SAFE_FIELDS} FROM email_providers ORDER BY id DESC"
-        ))
+        if current_user.customer_id:
+            result = db.execute(
+                text(f"SELECT {_SAFE_FIELDS} FROM email_providers WHERE customer_id=:cid ORDER BY id DESC"),
+                {"cid": current_user.customer_id},
+            )
+        else:
+            result = db.execute(text(f"SELECT {_SAFE_FIELDS} FROM email_providers ORDER BY id DESC"))
         return [dict(row._mapping) for row in result]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/email-providers")
-def create_email_provider(req: Dict[str, Any] = Body(...), db: Session = Depends(_get_session)):
+def create_email_provider(
+    req: Dict[str, Any] = Body(...),
+    db: Session = Depends(_get_session),
+    current_user: UserOut = Depends(get_current_user),
+):
     try:
         result = db.execute(text("""
             INSERT INTO email_providers
-                (code, name, type, smtp_host, smtp_port, smtp_user, smtp_pass, config_email, status)
+                (code, name, type, smtp_host, smtp_port, smtp_user, smtp_pass, config_email, status, customer_id)
             VALUES
-                (:code, :name, :type, :smtp_host, :smtp_port, :smtp_user, :smtp_pass, :config_email, :status)
+                (:code, :name, :type, :smtp_host, :smtp_port, :smtp_user, :smtp_pass, :config_email, :status, :customer_id)
         """), {
             "code":         req.get('code'),
             "name":         req.get('name'),
@@ -47,6 +58,7 @@ def create_email_provider(req: Dict[str, Any] = Body(...), db: Session = Depends
             "smtp_pass":    req.get('smtp_pass'),
             "config_email": req.get('config_email'),
             "status":       req.get('status', 'Active'),
+            "customer_id":  current_user.customer_id,
         })
         db.commit()
         safe = {k: req[k] for k in
@@ -59,10 +71,15 @@ def create_email_provider(req: Dict[str, Any] = Body(...), db: Session = Depends
 
 
 @router.put("/email-providers/{id}")
-def update_email_provider(id: int, req: Dict[str, Any] = Body(...), db: Session = Depends(_get_session)):
+def update_email_provider(
+    id: int,
+    req: Dict[str, Any] = Body(...),
+    db: Session = Depends(_get_session),
+    current_user: UserOut = Depends(get_current_user),
+):
     try:
-        # Only overwrite smtp_pass if the caller actually provided a non-empty value
-        db.execute(text("""
+        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
+        db.execute(text(f"""
             UPDATE email_providers
             SET code         = :code,
                 name         = :name,
@@ -75,7 +92,7 @@ def update_email_provider(id: int, req: Dict[str, Any] = Body(...), db: Session 
                 smtp_pass    = CASE
                     WHEN :smtp_pass IS NOT NULL AND :smtp_pass <> ''
                     THEN :smtp_pass ELSE smtp_pass END
-            WHERE id = :id
+            WHERE {where}
         """), {
             "code":         req.get('code'),
             "name":         req.get('name'),
@@ -87,6 +104,7 @@ def update_email_provider(id: int, req: Dict[str, Any] = Body(...), db: Session 
             "config_email": req.get('config_email'),
             "status":       req.get('status'),
             "id":           id,
+            "cid":          current_user.customer_id,
         })
         db.commit()
         return {"message": "Updated successfully"}
@@ -96,9 +114,14 @@ def update_email_provider(id: int, req: Dict[str, Any] = Body(...), db: Session 
 
 
 @router.delete("/email-providers/{id}")
-def delete_email_provider(id: int, db: Session = Depends(_get_session)):
+def delete_email_provider(
+    id: int,
+    db: Session = Depends(_get_session),
+    current_user: UserOut = Depends(get_current_user),
+):
     try:
-        db.execute(text("DELETE FROM email_providers WHERE id=:id"), {"id": id})
+        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
+        db.execute(text(f"DELETE FROM email_providers WHERE {where}"), {"id": id, "cid": current_user.customer_id})
         db.commit()
         return {"message": "Deleted successfully"}
     except Exception as e:

@@ -16,9 +16,14 @@ def _get_session():
         db.close()
 
 @router.get("/sms-jobs")
-def get_sms_jobs(db: Session = Depends(_get_session)):
+def get_sms_jobs(
+    db: Session = Depends(_get_session),
+    current_user = Depends(get_current_user),
+):
     try:
-        result = db.execute(text("""
+        cid_filter = "WHERE j.customer_id=:cid" if getattr(current_user, 'customer_id', None) else ""
+        params = {"cid": current_user.customer_id} if getattr(current_user, 'customer_id', None) else {}
+        result = db.execute(text(f"""
             SELECT j.*,
                 p.name   AS precinct_name,
                 t.name   AS template_name,
@@ -52,21 +57,26 @@ def get_sms_jobs(db: Session = Depends(_get_session)):
             LEFT JOIN sms_providers pr ON j.provider_id = pr.id
             LEFT JOIN contact_lists cl ON j.list_id     = cl.id
             LEFT JOIN voters        v  ON j.voter_id    = v.id
+            {cid_filter}
             ORDER BY j.id DESC
-        """))
+        """), params)
         return [dict(row._mapping) for row in result]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/sms-jobs")
-def create_sms_job(req: Dict[str, Any] = Body(...), db: Session = Depends(_get_session)):
+def create_sms_job(
+    req: Dict[str, Any] = Body(...),
+    db: Session = Depends(_get_session),
+    current_user = Depends(get_current_user),
+):
     try:
         result = db.execute(
             text("""
                 INSERT INTO sms_jobs
-                    (precinct_id, template_id, provider_id, scheduled_at, status, list_id, voter_id)
+                    (precinct_id, template_id, provider_id, scheduled_at, status, list_id, voter_id, customer_id)
                 VALUES
-                    (:precinct_id, :template_id, :provider_id, :scheduled_at, :status, :list_id, :voter_id)
+                    (:precinct_id, :template_id, :provider_id, :scheduled_at, :status, :list_id, :voter_id, :customer_id)
             """),
             {
                 "precinct_id": req.get('precinct_id') or None,
@@ -76,6 +86,7 @@ def create_sms_job(req: Dict[str, Any] = Body(...), db: Session = Depends(_get_s
                 "status": 'Pending',
                 "list_id":  req.get('list_id')  or None,
                 "voter_id": req.get('voter_id') or None,
+                "customer_id": getattr(current_user, 'customer_id', None),
             }
         )
         db.commit()

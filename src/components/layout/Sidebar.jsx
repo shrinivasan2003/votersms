@@ -1,12 +1,11 @@
 /* eslint-disable react/prop-types */
 import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
 import {
-  Home, Building2, Users, MessageSquare, Mail,
-  MessageCircle, Radio, AtSign, Phone, Send, MailOpen,
-  Play, FileText, Shield, Key, KeyRound,
-  ChevronDown, ChevronRight, Package, RefreshCw
+  Home, Users, MessageSquare, Mail,
+  MessageCircle, Send, MailOpen,
+  Play, FileText,
+  ChevronDown, ChevronRight, Package, RefreshCw, Building2, Settings2
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, isCollapsed, onItemClick }) => (
@@ -15,8 +14,8 @@ const NavItem = ({ to, icon: Icon, label, isCollapsed, onItemClick }) => (
     onClick={onItemClick}
     className={({ isActive }) =>
       `flex items-center px-10 py-2.5 transition-all border-l-[3px] overflow-hidden whitespace-nowrap ${
-        isActive 
-          ? 'bg-blue-50 border-blue-600 text-blue-600 font-bold' 
+        isActive
+          ? 'bg-blue-50 border-blue-600 text-blue-600 font-bold'
           : 'border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900'
       }`
     }
@@ -34,20 +33,18 @@ const NavItem = ({ to, icon: Icon, label, isCollapsed, onItemClick }) => (
 const NavGroup = ({ label, icon: Icon, children, isCollapsed, isOpen, onToggle, onExpand }) => {
   const location = useLocation();
   const childrenArray = React.Children.toArray(children);
-  const hasActiveChild = childrenArray.some(child => 
+  const hasActiveChild = childrenArray.some(child =>
     child.props && child.props.to === location.pathname
   );
 
   const handleClick = () => {
-    if (isCollapsed) {
-      onExpand();
-    }
+    if (isCollapsed) onExpand();
     onToggle();
   };
 
   return (
     <div className="mb-1">
-      <button 
+      <button
         onClick={handleClick}
         className={`w-full flex items-center justify-between px-5 py-3 text-gray-700 hover:text-brand-textPrimary transition-colors overflow-hidden ${hasActiveChild && isCollapsed ? 'text-blue-600 font-bold' : ''}`}
         title={isCollapsed ? label : ""}
@@ -72,11 +69,8 @@ const NavGroup = ({ label, icon: Icon, children, isCollapsed, isOpen, onToggle, 
 const Sidebar = ({ isCollapsed, onItemClick, onExpand }) => {
   const [openGroup, setOpenGroup] = useState('Masters');
   const location = useLocation();
-  const { user } = useAuth();
-
-  // Auto-expand group if child is active
   useEffect(() => {
-    if (['/organization', '/recipients', '/voters', '/sms-templates', '/email-templates', '/whatsapp-templates', '/sms-providers', '/email-providers', '/whatsapp-providers'].includes(location.pathname)) {
+    if (['/organization', '/recipients', '/voters', '/sms-templates', '/email-templates', '/whatsapp-templates'].includes(location.pathname)) {
       setOpenGroup('Masters');
     } else if (['/sms-jobs', '/email-jobs', '/whatsapp-jobs', '/process-job'].includes(location.pathname)) {
       setOpenGroup('Transactions');
@@ -91,25 +85,25 @@ const Sidebar = ({ isCollapsed, onItemClick, onExpand }) => {
 
   return (
     <>
-      {/* Mobile overlay */}
       {!isCollapsed && (
         <div className="fixed inset-0 bg-black/20 z-10 lg:hidden" onClick={onItemClick} />
       )}
-      
-      <aside 
+
+      <aside
         className={`fixed top-16 left-0 bottom-0 bg-white border-r border-brand-border z-20 flex flex-col overflow-y-auto overflow-x-hidden shadow-sm transition-all duration-300 ease-in-out ${
           isCollapsed ? 'w-[60px]' : 'w-[220px]'
         }`}
       >
         <nav className="flex-1 py-4">
+          {/* Dashboard */}
           <div className="mb-2">
             <NavLink
               to="/dashboard"
               onClick={onItemClick}
               className={({ isActive }) =>
                 `flex items-center px-5 py-3 transition-all border-l-[3px] overflow-hidden whitespace-nowrap ${
-                  isActive 
-                    ? 'bg-blue-50 border-blue-600 text-blue-600 font-bold' 
+                  isActive
+                    ? 'bg-blue-50 border-blue-600 text-blue-600 font-bold'
                     : 'border-transparent text-gray-600 hover:bg-gray-50'
                 }`
               }
@@ -124,65 +118,73 @@ const Sidebar = ({ isCollapsed, onItemClick, onExpand }) => {
             </NavLink>
           </div>
 
-          <NavGroup 
-            label="Masters" 
-            icon={Package} 
+          {/* Masters — no providers here; moved to Configuration */}
+          <NavGroup
+            label="Masters"
+            icon={Package}
             isCollapsed={isCollapsed}
             isOpen={openGroup === 'Masters'}
             onToggle={() => handleToggle('Masters')}
             onExpand={onExpand}
           >
-            <NavItem to="/organization" icon={Building2} label="Organization" isCollapsed={isCollapsed} onItemClick={onItemClick} />
-            <NavItem to="/recipients" icon={Users} label="Recipients" isCollapsed={isCollapsed} onItemClick={onItemClick} />
-            <NavItem to="/sms-templates" icon={MessageSquare} label="SMS Templates" isCollapsed={isCollapsed} onItemClick={onItemClick} />
-            <NavItem to="/email-templates" icon={Mail} label="Email Templates" isCollapsed={isCollapsed} onItemClick={onItemClick} />
+            <NavItem to="/organization"    icon={Building2}     label="Organization"        isCollapsed={isCollapsed} onItemClick={onItemClick} />
+            <NavItem to="/recipients"      icon={Users}         label="Recipients / Voters"  isCollapsed={isCollapsed} onItemClick={onItemClick} />
+            <NavItem to="/sms-templates"   icon={MessageSquare} label="SMS Templates"        isCollapsed={isCollapsed} onItemClick={onItemClick} />
+            <NavItem to="/email-templates" icon={Mail}          label="Email Templates"      isCollapsed={isCollapsed} onItemClick={onItemClick} />
             <NavItem to="/whatsapp-templates" icon={MessageCircle} label="WhatsApp Templates" isCollapsed={isCollapsed} onItemClick={onItemClick} />
-            <NavItem to="/sms-providers" icon={Radio} label="SMS Providers" isCollapsed={isCollapsed} onItemClick={onItemClick} />
-            <NavItem to="/email-providers" icon={AtSign} label="Email Providers" isCollapsed={isCollapsed} onItemClick={onItemClick} />
-            <NavItem to="/whatsapp-providers" icon={Phone} label="WhatsApp Providers" isCollapsed={isCollapsed} onItemClick={onItemClick} />
           </NavGroup>
 
-          <NavGroup 
-            label="Transactions" 
-            icon={RefreshCw} 
+          {/* Transactions */}
+          <NavGroup
+            label="Transactions"
+            icon={RefreshCw}
             isCollapsed={isCollapsed}
             isOpen={openGroup === 'Transactions'}
             onToggle={() => handleToggle('Transactions')}
             onExpand={onExpand}
           >
-            <NavItem to="/sms-jobs" icon={Send} label="SMS Jobs" isCollapsed={isCollapsed} onItemClick={onItemClick} />
-            <NavItem to="/email-jobs" icon={MailOpen} label="Email Jobs" isCollapsed={isCollapsed} onItemClick={onItemClick} />
-            <NavItem to="/whatsapp-jobs" icon={MessageCircle} label="WhatsApp Jobs" isCollapsed={isCollapsed} onItemClick={onItemClick} />
-            <NavItem to="/process-job" icon={Play} label="Process Jobs" isCollapsed={isCollapsed} onItemClick={onItemClick} />
+            <NavItem to="/sms-jobs"      icon={Send}          label="SMS Jobs"       isCollapsed={isCollapsed} onItemClick={onItemClick} />
+            <NavItem to="/email-jobs"    icon={MailOpen}      label="Email Jobs"     isCollapsed={isCollapsed} onItemClick={onItemClick} />
+            <NavItem to="/whatsapp-jobs" icon={MessageCircle} label="WhatsApp Jobs"  isCollapsed={isCollapsed} onItemClick={onItemClick} />
+            <NavItem to="/process-job"   icon={Play}          label="Process Jobs"   isCollapsed={isCollapsed} onItemClick={onItemClick} />
           </NavGroup>
 
-          <NavGroup 
-            label="Reports" 
-            icon={FileText} 
+          {/* Reports */}
+          <NavGroup
+            label="Reports"
+            icon={FileText}
             isCollapsed={isCollapsed}
             isOpen={openGroup === 'Reports'}
             onToggle={() => handleToggle('Reports')}
             onExpand={onExpand}
           >
-            <NavItem to="/sms-delivery-report"   icon={FileText} label="SMS Delivery Report"   isCollapsed={isCollapsed} onItemClick={onItemClick} />
-            <NavItem to="/email-delivery-report" icon={Mail}     label="Email Analytics"        isCollapsed={isCollapsed} onItemClick={onItemClick} />
+            <NavItem to="/sms-delivery-report"   icon={FileText} label="SMS Delivery Report" isCollapsed={isCollapsed} onItemClick={onItemClick} />
+            <NavItem to="/email-delivery-report" icon={Mail}     label="Email Analytics"     isCollapsed={isCollapsed} onItemClick={onItemClick} />
           </NavGroup>
 
-          {user?.role?.toLowerCase() === 'admin' && (
-            <NavGroup 
-              label="Admin" 
-              icon={Shield} 
-              isCollapsed={isCollapsed}
-              isOpen={openGroup === 'Admin'}
-              onToggle={() => handleToggle('Admin')}
-              onExpand={onExpand}
+          {/* Configuration — customer-specific provider settings */}
+          <div className="mb-1 mt-1">
+            <NavLink
+              to="/configuration"
+              onClick={onItemClick}
+              className={({ isActive }) =>
+                `flex items-center px-5 py-3 transition-all border-l-[3px] overflow-hidden whitespace-nowrap ${
+                  isActive
+                    ? 'bg-blue-50 border-blue-600 text-blue-600 font-bold'
+                    : 'border-transparent text-gray-600 hover:bg-gray-50'
+                }`
+              }
+              title={isCollapsed ? "Configuration" : ""}
             >
-              <NavItem to="/users" icon={Users} label="Users" isCollapsed={isCollapsed} onItemClick={onItemClick} />
-              <NavItem to="/roles" icon={Shield} label="Roles" isCollapsed={isCollapsed} onItemClick={onItemClick} />
-              <NavItem to="/permissions" icon={Key} label="Permissions" isCollapsed={isCollapsed} onItemClick={onItemClick} />
-              <NavItem to="/reset-password" icon={KeyRound} label="Reset Password" isCollapsed={isCollapsed} onItemClick={onItemClick} />
-            </NavGroup>
-          )}
+              <div className="flex items-center min-w-[20px]">
+                <Settings2 size={20} className="shrink-0" />
+              </div>
+              <span className={`ml-4 text-sm font-bold transition-opacity duration-300 ${isCollapsed ? 'opacity-0' : 'opacity-100'}`}>
+                Configuration
+              </span>
+            </NavLink>
+          </div>
+
         </nav>
       </aside>
     </>

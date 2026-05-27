@@ -1,5 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
+from datetime import datetime
 
 class LoginRequest(BaseModel):
     username: str
@@ -80,6 +81,7 @@ class UserCreate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[str] = "User"
     status: Optional[str] = "Active"
+    customer_id: Optional[int] = None
 
 
 class UserUpdate(BaseModel):
@@ -99,7 +101,31 @@ class UserOut(BaseModel):
     username: str
     email: Optional[str] = None
     name: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     role: Optional[str] = "User"
+    status: Optional[str] = "Active"
+    customer_id: Optional[int] = None
+    last_login: Optional[datetime] = None
+
+    model_config = {
+        "from_attributes": True
+    }
+
+
+class CustomerCreate(BaseModel):
+    organization_name: str
+    first_name: str
+    last_name: str
+    email: str
+    username: str
+    password: str
+
+
+class CustomerOut(BaseModel):
+    id: int
+    name: str
+    email: Optional[str] = None
     status: Optional[str] = "Active"
 
     model_config = {

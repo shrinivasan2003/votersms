@@ -3,6 +3,8 @@ from typing import Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
+from app.dependencies.security import get_current_user
+from app.schemas import UserOut
 
 router = APIRouter()
 
@@ -13,24 +15,34 @@ def _get_session():
     finally:
         db.close()
 
-# Whatsapp Templates
 @router.get("/whatsapp-templates")
-def get_whatsapp_templates(db: Session = Depends(_get_session)):
+def get_whatsapp_templates(
+    db: Session = Depends(_get_session),
+    current_user: UserOut = Depends(get_current_user),
+):
     try:
-        result = db.execute(text("SELECT * FROM whatsapp_templates ORDER BY id DESC"))
+        if current_user.customer_id:
+            result = db.execute(
+                text("SELECT * FROM whatsapp_templates WHERE customer_id=:cid ORDER BY id DESC"),
+                {"cid": current_user.customer_id},
+            )
+        else:
+            result = db.execute(text("SELECT * FROM whatsapp_templates ORDER BY id DESC"))
         return [dict(row._mapping) for row in result]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/whatsapp-templates")
-def create_whatsapp_template(req: Dict[str, Any] = Body(...), db: Session = Depends(_get_session)):
+def create_whatsapp_template(
+    req: Dict[str, Any] = Body(...),
+    db: Session = Depends(_get_session),
+    current_user: UserOut = Depends(get_current_user),
+):
     try:
         result = db.execute(
-            text("""
-                INSERT INTO whatsapp_templates (code, name, body, status)
-                VALUES (:code, :name, :body, :status)
-            """),
-            {"code": req.get('code'), "name": req.get('name'), "body": req.get('body'), "status": req.get('status', 'Active')}
+            text("INSERT INTO whatsapp_templates (code, name, body, status, customer_id) VALUES (:code, :name, :body, :status, :customer_id)"),
+            {"code": req.get('code'), "name": req.get('name'), "body": req.get('body'),
+             "status": req.get('status', 'Active'), "customer_id": current_user.customer_id},
         )
         db.commit()
         return {"id": result.lastrowid, **req}
@@ -39,15 +51,18 @@ def create_whatsapp_template(req: Dict[str, Any] = Body(...), db: Session = Depe
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/whatsapp-templates/{id}")
-def update_whatsapp_template(id: int, req: Dict[str, Any] = Body(...), db: Session = Depends(_get_session)):
+def update_whatsapp_template(
+    id: int,
+    req: Dict[str, Any] = Body(...),
+    db: Session = Depends(_get_session),
+    current_user: UserOut = Depends(get_current_user),
+):
     try:
+        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
         db.execute(
-            text("""
-                UPDATE whatsapp_templates
-                SET code=:code, name=:name, body=:body, status=:status
-                WHERE id=:id
-            """),
-            {"code": req.get('code'), "name": req.get('name'), "body": req.get('body'), "status": req.get('status'), "id": id}
+            text(f"UPDATE whatsapp_templates SET code=:code, name=:name, body=:body, status=:status WHERE {where}"),
+            {"code": req.get('code'), "name": req.get('name'), "body": req.get('body'),
+             "status": req.get('status'), "id": id, "cid": current_user.customer_id},
         )
         db.commit()
         return {"message": "Updated successfully"}
@@ -56,9 +71,14 @@ def update_whatsapp_template(id: int, req: Dict[str, Any] = Body(...), db: Sessi
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/whatsapp-templates/{id}")
-def delete_whatsapp_template(id: int, db: Session = Depends(_get_session)):
+def delete_whatsapp_template(
+    id: int,
+    db: Session = Depends(_get_session),
+    current_user: UserOut = Depends(get_current_user),
+):
     try:
-        db.execute(text("DELETE FROM whatsapp_templates WHERE id=:id"), {"id": id})
+        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
+        db.execute(text(f"DELETE FROM whatsapp_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id})
         db.commit()
         return {"message": "Deleted successfully"}
     except Exception as e:
