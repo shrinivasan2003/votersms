@@ -206,12 +206,18 @@ const EmailTemplates = () => {
                 name="body"
                 className={`block w-full border border-brand-border px-4 py-4 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue min-h-[200px] transition-all ${format === 'HTML' ? 'rounded-b-lg' : 'rounded-lg'}`} 
                 required 
-                placeholder="Use {{FirstName}}, {{LastName}}, or {{FullName}} for variables"
+                placeholder="e.g. Dear {{FirstName}}, thank you for registering..."
                 defaultValue={editingRow?.body || ''}
               ></textarea>
-              <p className="text-xs text-brand-textMuted pt-1">
-                Available variables: {'{FirstName}'}, {'{LastName}'}, {'{FullName}'}
-              </p>
+              <div className="text-xs text-brand-textMuted pt-1 space-y-0.5">
+                <p className="font-semibold text-brand-textSecondary">Available variables:</p>
+                <p>
+                  <code className="bg-gray-100 px-1 rounded">{'{{FirstName}}'}</code> — recipient's first name &nbsp;
+                  <code className="bg-gray-100 px-1 rounded">{'{{LastName}}'}</code> — last name &nbsp;
+                  <code className="bg-gray-100 px-1 rounded">{'{{FullName}}'}</code> — full name
+                </p>
+                <p className="text-gray-400">Example: <em>Dear {'{{FirstName}}'}, your ballot has been received.</em></p>
+              </div>
             </div>
 
             <div className="flex items-center space-x-3">

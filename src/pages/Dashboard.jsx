@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
   Users, FileText, BarChart2, UserCheck,
-  Upload, Circle, Filter, MessageSquare, Mail, MessageCircle
+  Upload, Circle, Filter, MessageSquare, Mail, MessageCircle,
+  CheckCircle2, XCircle, Loader2, Clock, UserPlus
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,6 +22,7 @@ const Dashboard = () => {
     whatsappJobs: 0,
   });
   const [recentJobs, setRecentJobs] = useState([]);
+  const [recentActivity, setRecentActivity] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     jobType: 'All Jobs',
@@ -33,10 +35,14 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const statsRes = await fetch('/api/dashboard-stats');
-        const recentRes = await fetch('/api/recent-jobs');
+        const [statsRes, recentRes, activityRes] = await Promise.all([
+          fetch('/api/dashboard-stats'),
+          fetch('/api/recent-jobs'),
+          fetch('/api/recent-activity'),
+        ]);
         if (statsRes.ok) setStats(await statsRes.json());
         if (recentRes.ok) setRecentJobs(await recentRes.json());
+        if (activityRes.ok) setRecentActivity(await activityRes.json());
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
       }
@@ -45,6 +51,34 @@ const Dashboard = () => {
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  const timeAgo = (dateStr) => {
+    if (!dateStr) return '';
+    const seconds = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+    if (seconds < 5)   return 'just now';
+    if (seconds < 60)  return `${seconds}s ago`;
+    const mins = Math.floor(seconds / 60);
+    if (mins < 60)     return `${mins} minute${mins !== 1 ? 's' : ''} ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24)    return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days !== 1 ? 's' : ''} ago`;
+  };
+
+  const activityIcon = (item) => {
+    switch (item.event_type) {
+      case 'completed': return <CheckCircle2 size={16} className="text-green-500" />;
+      case 'failed':    return <XCircle      size={16} className="text-red-500" />;
+      case 'processing':return <Loader2      size={16} className="text-amber-500 animate-spin" />;
+      case 'scheduled': return <Clock        size={16} className="text-amber-500" />;
+      case 'import':    return <UserPlus     size={16} className="text-purple-500" />;
+      default:          return <Circle       size={16} className={
+        item.job_type === 'EMAIL'    ? 'text-purple-500 fill-purple-100' :
+        item.job_type === 'WHATSAPP' ? 'text-green-500 fill-green-100'   :
+                                       'text-brand-blue fill-blue-100'
+      } />;
+    }
+  };
 
   const filteredJobs = recentJobs.filter((job) => {
     if (filters.jobType !== 'All Jobs') {
@@ -151,23 +185,32 @@ const Dashboard = () => {
         {/* Recent Activity */}
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-brand-border p-6">
           <h3 className="text-lg font-semibold text-brand-textPrimary mb-4">Recent Activity</h3>
-          <div className="space-y-6">
-            {[
-              { color: 'text-brand-blue fill-brand-blue', label: 'New SMS job created', time: '2 minutes ago' },
-              { color: 'text-green-500 fill-green-500', label: 'Recipient data imported', time: '15 minutes ago' },
-              { color: 'text-brand-blue fill-brand-blue', label: 'Template updated', time: '1 hour ago' },
-            ].map((item, i) => (
-              <div key={i} className={`flex items-start relative pl-4 ml-3 ${i < 2 ? 'pb-6 border-l-2 border-gray-200' : ''}`}>
-                <div className="absolute -left-[9px] top-1 bg-white">
-                  <Circle size={16} className={item.color} />
+          {recentActivity.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <Circle size={32} className="text-gray-200 mb-3" />
+              <p className="text-sm text-brand-textMuted">No activity yet.</p>
+              <p className="text-xs text-gray-400 mt-1">Create a job to see activity here.</p>
+            </div>
+          ) : (
+            <div className="space-y-0">
+              {recentActivity.map((item, i) => (
+                <div
+                  key={i}
+                  className={`flex items-start relative pl-4 ml-3 ${
+                    i < recentActivity.length - 1 ? 'pb-5 border-l-2 border-gray-100' : 'pb-1'
+                  }`}
+                >
+                  <div className="absolute -left-[9px] top-0.5 bg-white p-0.5 rounded-full">
+                    {activityIcon(item)}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-brand-textPrimary leading-snug">{item.label}</p>
+                    <p className="text-xs text-brand-textMuted mt-0.5">{timeAgo(item.occurred_at)}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-brand-textPrimary">{item.label}</p>
-                  <p className="text-xs text-brand-textMuted mt-1">{item.time}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

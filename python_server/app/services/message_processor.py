@@ -144,10 +144,19 @@ def process_sms_job(job_id: int):
             raw_phone      = voter.get("phone", "") or ""
             e164_phone     = _normalize_phone(raw_phone)
 
-            body = (
+            first = voter.get("first_name") or ""
+            last  = voter.get("last_name")  or ""
+            full  = f"{first} {last}".strip()
+            body  = (
                 template.body
-                .replace("{{first_name}}", voter.get("first_name") or "")
-                .replace("{{last_name}}",  voter.get("last_name")  or "")
+                # CamelCase — shown in UI
+                .replace("{{FirstName}}", first)
+                .replace("{{LastName}}",  last)
+                .replace("{{FullName}}",  full)
+                # snake_case — backward compat
+                .replace("{{first_name}}", first)
+                .replace("{{last_name}}",  last)
+                .replace("{{full_name}}",  full)
             )
             try:
                 message = twilio_client.messages.create(
@@ -253,10 +262,19 @@ def process_email_job(job_id: int):
 
         with httpx.Client() as client:
             for voter in voters:
+                first     = voter.get("first_name") or ""
+                last      = voter.get("last_name")  or ""
+                full      = f"{first} {last}".strip()
                 text_body = (
                     template.body
-                    .replace("{{first_name}}", voter.get("first_name") or "")
-                    .replace("{{last_name}}",  voter.get("last_name")  or "")
+                    # CamelCase — shown in UI
+                    .replace("{{FirstName}}", first)
+                    .replace("{{LastName}}",  last)
+                    .replace("{{FullName}}",  full)
+                    # snake_case — backward compat
+                    .replace("{{first_name}}", first)
+                    .replace("{{last_name}}",  last)
+                    .replace("{{full_name}}",  full)
                 )
                 html_body    = _text_to_html(text_body)
                 from_address = (
