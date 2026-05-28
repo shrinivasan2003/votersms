@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
 import RecipientPicker from '../../components/shared/RecipientPicker';
 import { useAuth } from '../../contexts/AuthContext';
+import { useJobPolling } from '../../hooks/useJobPolling';
 
 /* ── helper: display the recipient source in the table ── */
 const RecipientCell = ({ row }) => {
@@ -49,6 +50,17 @@ const SmsJobs = () => {
       setLoading(false);
     }
   };
+
+  // Silent refresh — only re-fetches the jobs list (no loading spinner)
+  const refreshJobs = useCallback(async () => {
+    try {
+      const res = await fetch(API_URL);
+      const data = await res.json();
+      if (Array.isArray(data)) setJobs(data);
+    } catch { /* silent */ }
+  }, []);
+
+  useJobPolling(refreshJobs);
 
   useEffect(() => { fetchData(); }, []);
 

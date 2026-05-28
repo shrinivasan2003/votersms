@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
 import RecipientPicker from '../../components/shared/RecipientPicker';
+import { useJobPolling } from '../../hooks/useJobPolling';
 
 const RecipientCell = ({ row }) => {
   if (row.voter_name && row.voter_id)
@@ -45,6 +46,17 @@ const EmailJobs = () => {
       setLoading(false);
     }
   };
+
+  // Silent refresh — only re-fetches the jobs list (no loading spinner)
+  const refreshJobs = useCallback(async () => {
+    try {
+      const res = await fetch(API_URL);
+      const data = await res.json();
+      if (Array.isArray(data)) setJobs(data);
+    } catch { /* silent */ }
+  }, []);
+
+  useJobPolling(refreshJobs);
 
   useEffect(() => { fetchData(); }, []);
 

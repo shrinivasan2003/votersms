@@ -1,14 +1,17 @@
 import os
-from datetime import datetime
-from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
+import secrets
+from datetime import datetime, timedelta
+from fastapi import APIRouter, HTTPException, Depends, Request
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, or_
 
 from app.database import get_db
 from app.models import User as UserModel
 from app.utils.password import verify_password, hash_password
+from app.utils.email import send_password_reset_email
 from app.dependencies.security import create_access_token
+from app.limiter import limiter
 
 router = APIRouter()
 
@@ -16,24 +19,54 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
+    @field_validator('username', 'password')
+    @classmethod
+    def not_empty(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError('Field cannot be empty')
+        if len(v) > 256:
+            raise ValueError('Field too long')
+        return v
+
+class ForgotPasswordRequest(BaseModel):
+    username: str
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @field_validator('new_password')
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        if len(v) > 128:
+            raise ValueError('Password too long')
+        return v
+
 
 @router.post("/login")
-def login(request: LoginRequest, db: Session = Depends(get_db)):
-    # Check env-var admin override (platform super-admin shortcut)
-    admin_user = os.getenv("ADMIN_USERNAME", "admin")
-    admin_pass = os.getenv("ADMIN_PASSWORD", "admin123")
-
-    user = db.query(UserModel).filter(UserModel.username == request.username).first()
+@limiter.limit("10/minute")
+def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
+    # Allow login by username OR email
+    user = db.query(UserModel).filter(
+        or_(UserModel.username == body.username, UserModel.email == body.username)
+    ).first()
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # Password verification: hashed first, then plaintext fallback with auto-upgrade
-    if verify_password(request.password, user.password):
-        pass
-    elif request.password == user.password:
-        user.password = hash_password(request.password)
-    else:
+    # Password verification — hashed only; plaintext passwords are not accepted
+    if not verify_password(body.password, user.password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Block inactive or paused accounts
+    status = getattr(user, "status", "Active")
+    if status == "Inactive":
+        raise HTTPException(status_code=403, detail="Your account has been deactivated. Please contact your administrator.")
+    if status == "Paused":
+        raise HTTPException(status_code=403, detail="Your account is currently paused. Please contact your administrator.")
 
     # Record last login time
     db.execute(
@@ -68,3 +101,47 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
         "customer_id":       customer_id,
         "organization_name": org_name,
     }
+
+
+@router.post("/forgot-password")
+@limiter.limit("5/minute")
+def forgot_password(request: Request, body: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(UserModel).filter(
+        UserModel.username == body.username,
+        UserModel.email == body.email,
+    ).first()
+    # Always return success to avoid leaking which accounts exist
+    if not user:
+        return {"message": "If that email is registered, a reset link has been sent."}
+
+    token = secrets.token_urlsafe(32)
+    expires = datetime.utcnow() + timedelta(hours=1)
+    db.execute(
+        text("UPDATE users SET reset_token=:tok, reset_token_expires=:exp WHERE id=:id"),
+        {"tok": token, "exp": expires, "id": user.id},
+    )
+    db.commit()
+
+    send_password_reset_email(user.email, token)
+    return {"message": "If that email is registered, a reset link has been sent."}
+
+
+@router.post("/reset-password")
+def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
+    row = db.execute(
+        text("SELECT id, reset_token_expires FROM users WHERE reset_token=:tok"),
+        {"tok": body.token},
+    ).first()
+    if not row:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token.")
+
+    if datetime.utcnow() > row.reset_token_expires:
+        raise HTTPException(status_code=400, detail="Reset token has expired.")
+
+    new_hashed = hash_password(body.new_password)
+    db.execute(
+        text("UPDATE users SET password=:pw, reset_token=NULL, reset_token_expires=NULL WHERE id=:id"),
+        {"pw": new_hashed, "id": row.id},
+    )
+    db.commit()
+    return {"message": "Password updated successfully."}

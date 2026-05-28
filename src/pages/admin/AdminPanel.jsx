@@ -1,37 +1,36 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   Eye, EyeOff, Lock, User, Loader2, ShieldCheck,
   Building2, Mail, UserPlus, Activity, Trash2, PowerOff,
   CheckCircle, XCircle, Power, Settings, Send, PauseCircle,
+  LogOut, ChevronRight, Users, BarChart3, Database,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useToast } from '../../hooks/useToast';
+import { useApi } from '../../hooks/useApi';
+import { useForm } from '../../hooks/useForm';
+import { customersApi } from '../../api/customers';
+import { adminApi } from '../../api/admin';
+import { CACHE_KEYS } from '../../config/constants';
+import FormField from '../../components/shared/FormField';
 import bdaLogo from '../../assets/bda-logo.webp';
 
-// ── Field input — defined at module scope to prevent remount on re-render ──────
-const Field = ({ label, name, type = 'text', placeholder, icon: Icon, value, onChange, showPassword, onTogglePassword }) => (
-  <div className="space-y-1.5">
-    <label className="text-sm font-semibold text-gray-600">{label}</label>
-    <div className="relative">
-      <Icon size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-      <input
-        type={name === 'password' ? (showPassword ? 'text' : 'password') : type}
-        name={name} required value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-        className="w-full h-11 pl-10 pr-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:bg-white focus:border-[#001F3F]/40 transition-all"
-      />
-      {name === 'password' && (
-        <button type="button" onClick={onTogglePassword}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-          {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-        </button>
-      )}
+// ── Toast display component ────────────────────────────────────────────────────
+const Toast = ({ toast }) => {
+  if (!toast) return null;
+  return (
+    <div className={`mb-5 flex items-start gap-3 p-4 rounded-xl text-sm font-medium border
+      ${toast.type === 'success' ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-800 border-red-200'}`}>
+      {toast.type === 'success'
+        ? <CheckCircle size={17} className="mt-0.5 shrink-0 text-green-600" />
+        : <XCircle size={17} className="mt-0.5 shrink-0 text-red-500" />}
+      <span>{toast.msg}</span>
     </div>
-  </div>
-);
+  );
+};
 
-// ── Admin Login form ───────────────────────────────────────────────────────────
+// ── Admin Login Form ───────────────────────────────────────────────────────────
 function AdminLoginForm({ onSuccess }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -55,8 +54,8 @@ function AdminLoginForm({ onSuccess }) {
         return;
       }
       onSuccess();
-    } catch {
-      setError('Invalid credentials');
+    } catch (err) {
+      setError(err.message || 'Invalid credentials');
     } finally {
       setLoading(false);
     }
@@ -64,45 +63,45 @@ function AdminLoginForm({ onSuccess }) {
 
   return (
     <div className="w-full max-w-[420px]">
-      <div className="bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.08)] border border-gray-100 overflow-hidden">
-        <div className="bg-[#001F3F] p-6 text-white flex items-center space-x-3">
-          <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
-            <ShieldCheck size={20} className="text-blue-300" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold">Platform Admin</h2>
-            <p className="text-gray-400 text-xs mt-0.5">Restricted — administrators only</p>
+      <div className="bg-white rounded-3xl shadow-[0_24px_60px_rgba(0,0,0,0.08)] border border-gray-100 overflow-hidden">
+        <div className="bg-gradient-to-r from-[#001F3F] to-[#002d5c] p-7 text-white">
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-9 h-9 bg-white/10 rounded-xl flex items-center justify-center">
+              <ShieldCheck size={18} className="text-blue-300" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">Platform Admin</h2>
+              <p className="text-blue-300/80 text-xs mt-0.5">Restricted — administrators only</p>
+            </div>
           </div>
         </div>
 
-        <div className="p-6 lg:p-8">
+        <div className="p-7">
           {error && (
             <div className="mb-5 p-3.5 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex items-center gap-2">
-              <XCircle size={16} /> {error}
+              <XCircle size={16} className="shrink-0" /> {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
               <label className="text-sm font-bold text-gray-600">Username</label>
               <div className="relative group">
                 <User size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#001F3F] transition-colors" />
-                <input
-                  type="text" required value={username} onChange={(e) => setUsername(e.target.value)}
+                <input type="text" required value={username} onChange={(e) => setUsername(e.target.value)}
                   placeholder="admin"
-                  className="w-full h-12 pl-11 pr-4 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:bg-white focus:border-[#001F3F]/30 focus:ring-4 focus:ring-[#001F3F]/5 transition-all"
+                  className="w-full h-12 pl-11 pr-4 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:bg-white focus:border-[#001F3F]/30 focus:ring-4 focus:ring-[#001F3F]/5 transition-all text-gray-900"
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <label className="text-sm font-bold text-gray-600">Password</label>
               <div className="relative group">
                 <Lock size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#001F3F] transition-colors" />
-                <input
-                  type={showPassword ? 'text' : 'password'} required value={password}
+                <input type={showPassword ? 'text' : 'password'} required value={password}
                   onChange={(e) => setPassword(e.target.value)} placeholder="••••••••"
-                  className="w-full h-12 pl-11 pr-12 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:bg-white focus:border-[#001F3F]/30 focus:ring-4 focus:ring-[#001F3F]/5 transition-all"
+                  className="w-full h-12 pl-11 pr-12 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:bg-white focus:border-[#001F3F]/30 focus:ring-4 focus:ring-[#001F3F]/5 transition-all text-gray-900"
                 />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#001F3F] transition-colors">
@@ -112,54 +111,38 @@ function AdminLoginForm({ onSuccess }) {
             </div>
 
             <button type="submit" disabled={loading}
-              className="w-full h-12 bg-[#001F3F] hover:bg-[#002d5c] disabled:bg-gray-300 text-white rounded-xl font-bold shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2">
+              className="w-full h-12 bg-gradient-to-r from-[#001F3F] to-[#002d5c] hover:from-[#002d5c] hover:to-[#003d7a] disabled:from-gray-300 disabled:to-gray-300 text-white rounded-xl font-bold shadow-lg shadow-[#001F3F]/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">
               {loading ? <Loader2 className="animate-spin" size={20} /> : 'Sign in as Admin'}
             </button>
           </form>
         </div>
       </div>
+
+      <p className="text-center mt-5 text-xs text-gray-400">© 2026 BallotDA Enterprise. All rights reserved.</p>
     </div>
   );
 }
 
-// ── Create User tab ────────────────────────────────────────────────────────────
-function CreateUserTab({ getAuthHeaders }) {
-  const [form, setForm] = useState({
-    organization_name: '', first_name: '', last_name: '',
-    email: '', username: '', password: ''
-  });
+// ── Create Customer tab ────────────────────────────────────────────────────────
+function CreateCustomerTab() {
+  const INITIAL = { organization_name: '', first_name: '', last_name: '', email: '', username: '', password: '' };
+  const { values, handleChange, reset } = useForm(INITIAL);
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [toast, setToast] = useState(null);
-
-  const showToast = (msg, type = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 5000);
-  };
-
-  const handleChange = (e) => setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  const { toast, showToast } = useToast();
 
   const handleCreate = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const res = await fetch('/api/customers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        const emailNote = data.email_sent
-          ? `Welcome email sent to ${form.email}.`
-          : 'Account created (configure Postmark to send welcome emails).';
-        showToast(`Account created for ${form.organization_name}. ${emailNote}`);
-        setForm({ organization_name: '', first_name: '', last_name: '', email: '', username: '', password: '' });
-      } else {
-        showToast(data.detail || 'Failed to create account', 'error');
-      }
-    } catch {
-      showToast('Network error', 'error');
+      const data = await customersApi.create(values);
+      const emailNote = data.email_sent
+        ? `Welcome email sent to ${values.email}.`
+        : 'Account created (configure Postmark to send welcome emails).';
+      showToast(`Account created for ${values.organization_name}. ${emailNote}`);
+      reset();
+    } catch (err) {
+      showToast(err.message || 'Failed to create account', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -167,45 +150,44 @@ function CreateUserTab({ getAuthHeaders }) {
 
   return (
     <div className="max-w-2xl mx-auto">
-      {toast && (
-        <div className={`mb-5 flex items-start gap-2 p-4 rounded-xl text-sm font-medium border
-          ${toast.type === 'success' ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-800 border-red-200'}`}>
-          {toast.type === 'success' ? <CheckCircle size={17} className="mt-0.5 shrink-0" /> : <XCircle size={17} className="mt-0.5 shrink-0" />}
-          <span>{toast.msg}</span>
-        </div>
-      )}
+      <Toast toast={toast} />
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-          <h2 className="font-bold text-[#001F3F]">New Customer Account</h2>
-          <p className="text-xs text-gray-500 mt-0.5">Login credentials will be sent to the customer's email via Postmark</p>
+        <div className="px-7 py-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center gap-3">
+          <div className="w-9 h-9 bg-[#001F3F]/8 rounded-xl flex items-center justify-center">
+            <UserPlus size={17} className="text-[#001F3F]" />
+          </div>
+          <div>
+            <h2 className="font-bold text-[#001F3F] text-base">New Customer Account</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Login credentials will be emailed to the customer via Postmark</p>
+          </div>
         </div>
 
-        <form onSubmit={handleCreate} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={handleCreate} className="p-7 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
-            <Field label="Organization Name" name="organization_name" placeholder="Acme County Democrats" icon={Building2}
-              value={form.organization_name} onChange={handleChange} />
+            <FormField label="Organization Name *" name="organization_name" placeholder="Acme County Democrats" icon={Building2}
+              value={values.organization_name} onChange={handleChange} />
           </div>
-          <Field label="First Name" name="first_name" placeholder="Jane" icon={User}
-            value={form.first_name} onChange={handleChange} />
-          <Field label="Last Name" name="last_name" placeholder="Smith" icon={User}
-            value={form.last_name} onChange={handleChange} />
+          <FormField label="First Name *" name="first_name" placeholder="Jane" icon={User}
+            value={values.first_name} onChange={handleChange} />
+          <FormField label="Last Name *" name="last_name" placeholder="Smith" icon={User}
+            value={values.last_name} onChange={handleChange} />
           <div className="md:col-span-2">
-            <Field label="Email Address" name="email" type="email" placeholder="jane@acme.org" icon={Mail}
-              value={form.email} onChange={handleChange} />
+            <FormField label="Email Address *" name="email" type="email" placeholder="jane@acme.org" icon={Mail}
+              value={values.email} onChange={handleChange} />
           </div>
-          <Field label="Username" name="username" placeholder="jane_acme" icon={User}
-            value={form.username} onChange={handleChange} />
-          <Field label="Initial Password" name="password" placeholder="••••••••" icon={Lock}
-            value={form.password} onChange={handleChange}
+          <FormField label="Username *" name="username" placeholder="jane_acme" icon={User}
+            value={values.username} onChange={handleChange} />
+          <FormField label="Initial Password *" name="password" placeholder="••••••••" icon={Lock}
+            value={values.password} onChange={handleChange}
             showPassword={showPassword} onTogglePassword={() => setShowPassword((v) => !v)} />
 
           <div className="md:col-span-2 pt-2">
             <button type="submit" disabled={submitting}
-              className="w-full h-12 bg-[#001F3F] hover:bg-[#002d5c] disabled:bg-gray-300 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-md">
+              className="w-full h-12 bg-gradient-to-r from-[#001F3F] to-[#002d5c] hover:from-[#002d5c] hover:to-[#003d7a] disabled:from-gray-300 disabled:to-gray-300 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-md shadow-[#001F3F]/15">
               {submitting
                 ? <Loader2 className="animate-spin" size={18} />
-                : <><UserPlus size={18} /> Create Account & Send Welcome Email</>}
+                : <><UserPlus size={18} /> Create Account &amp; Send Welcome Email</>}
             </button>
           </div>
         </form>
@@ -214,62 +196,42 @@ function CreateUserTab({ getAuthHeaders }) {
   );
 }
 
-// ── Monitor Usage tab ──────────────────────────────────────────────────────────
-function MonitorUsageTab({ getAuthHeaders }) {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+// ── Monitor Accounts tab ───────────────────────────────────────────────────────
+function MonitorAccountsTab() {
+  const fetchCustomers = useCallback(() => customersApi.list(), []);
+  const { data: users = [], loading, reload } = useApi(fetchCustomers, CACHE_KEYS.CUSTOMERS);
   const [actionLoading, setActionLoading] = useState(null);
-  const [toast, setToast] = useState(null);
-
-  const showToast = (msg, type = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 4000);
-  };
-
-  const fetchUsers = async () => {
-    try {
-      const res = await fetch('/api/customers', { headers: getAuthHeaders() });
-      if (res.ok) setUsers(await res.json());
-    } catch { showToast('Failed to load users', 'error'); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { fetchUsers(); }, []);
+  const { toast, showToast } = useToast();
 
   const doAction = async (userId, action) => {
     setActionLoading(userId + action);
     try {
-      const url = action === 'delete'
-        ? `/api/customers/users/${userId}`
-        : `/api/customers/users/${userId}/${action}`;
-      const res = await fetch(url, {
-        method: action === 'delete' ? 'DELETE' : 'PATCH',
-        headers: getAuthHeaders(),
-      });
-      if (res.ok) {
-        const label = action === 'delete' ? 'deleted' : action === 'pause' ? 'paused' : `${action}d`;
-        showToast(`Account ${label}`);
-        fetchUsers();
-      } else {
-        const d = await res.json();
-        showToast(d.detail || 'Action failed', 'error');
-      }
-    } catch { showToast('Network error', 'error'); }
-    finally { setActionLoading(null); }
+      if (action === 'delete') await customersApi.remove(userId);
+      else if (action === 'pause') await customersApi.pause(userId);
+      else if (action === 'activate') await customersApi.activate(userId);
+      else if (action === 'deactivate') await customersApi.deactivate(userId);
+      const label = action === 'delete' ? 'deleted' : action === 'pause' ? 'paused' : `${action}d`;
+      showToast(`Account ${label}`);
+      reload();
+    } catch (err) {
+      showToast(err.message || 'Action failed', 'error');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const formatDate = (dt) => dt ? new Date(dt).toLocaleString() : '—';
 
   const statusBadge = (status) => {
-    const map = {
-      Active:   'bg-green-50 text-green-700',
-      Inactive: 'bg-red-50 text-red-600',
-      Paused:   'bg-yellow-50 text-yellow-700',
+    const styles = {
+      Active:   { pill: 'bg-green-50 text-green-700 border border-green-200',  dot: 'bg-green-500' },
+      Inactive: { pill: 'bg-red-50 text-red-600 border border-red-200',        dot: 'bg-red-400' },
+      Paused:   { pill: 'bg-amber-50 text-amber-700 border border-amber-200',  dot: 'bg-amber-400' },
     };
-    const dot = { Active: 'bg-green-500', Inactive: 'bg-red-400', Paused: 'bg-yellow-400' };
+    const s = styles[status] || { pill: 'bg-gray-100 text-gray-600 border border-gray-200', dot: 'bg-gray-400' };
     return (
-      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${map[status] || 'bg-gray-100 text-gray-600'}`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${dot[status] || 'bg-gray-400'}`} />
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${s.pill}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
         {status}
       </span>
     );
@@ -277,41 +239,46 @@ function MonitorUsageTab({ getAuthHeaders }) {
 
   return (
     <div>
-      {toast && (
-        <div className={`mb-5 flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium border
-          ${toast.type === 'success' ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-800 border-red-200'}`}>
-          {toast.type === 'success' ? <CheckCircle size={16} /> : <XCircle size={16} />}
-          {toast.msg}
-        </div>
-      )}
+      <Toast toast={toast} />
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-          <div>
-            <h2 className="font-bold text-[#001F3F]">Customer Accounts</h2>
-            <p className="text-xs text-gray-500 mt-0.5">{users.length} account{users.length !== 1 ? 's' : ''}</p>
+        <div className="px-7 py-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-[#001F3F]/8 rounded-xl flex items-center justify-center">
+              <Users size={17} className="text-[#001F3F]" />
+            </div>
+            <div>
+              <h2 className="font-bold text-[#001F3F] text-base">Customer Accounts</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {users.length} account{users.length !== 1 ? 's' : ''} registered
+              </p>
+            </div>
           </div>
-          <button onClick={fetchUsers} className="text-xs text-gray-500 hover:text-[#001F3F] border border-gray-200 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-all font-medium">
-            Refresh
+          <button onClick={reload}
+            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-[#001F3F] border border-gray-200 hover:border-[#001F3F]/30 bg-white hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-all font-semibold">
+            ↻ Refresh
           </button>
         </div>
 
         {loading ? (
-          <div className="p-12 text-center text-gray-400 text-sm flex items-center justify-center gap-2">
-            <Loader2 className="animate-spin" size={16} /> Loading...
+          <div className="p-16 text-center text-gray-400 text-sm flex items-center justify-center gap-2">
+            <Loader2 className="animate-spin" size={18} /> Loading accounts...
           </div>
         ) : users.length === 0 ? (
-          <div className="p-12 text-center">
-            <Activity size={40} className="text-gray-200 mx-auto mb-3" />
-            <p className="text-gray-400 text-sm">No customer accounts yet.</p>
+          <div className="p-16 text-center">
+            <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Activity size={24} className="text-gray-300" />
+            </div>
+            <p className="text-gray-500 font-medium">No customer accounts yet</p>
+            <p className="text-gray-400 text-sm mt-1">Create one from the "Create Customer" tab</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[800px]">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  {['Organization', 'Name', 'Username', 'Email', 'Last Login', 'Status', 'Actions'].map((h) => (
-                    <th key={h} className="text-left px-5 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  {['Organization', 'Contact', 'Username', 'Email', 'Last Login', 'Status', 'Actions'].map((h) => (
+                    <th key={h} className="text-left px-5 py-3.5 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
                       {h}
                     </th>
                   ))}
@@ -319,48 +286,47 @@ function MonitorUsageTab({ getAuthHeaders }) {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                  <tr key={u.id} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
-                          <Building2 size={14} className="text-blue-500" />
+                        <div className="w-9 h-9 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-xl flex items-center justify-center shrink-0">
+                          <Building2 size={15} className="text-blue-500" />
                         </div>
                         <span className="font-semibold text-[#001F3F] text-sm">{u.organization_name || '—'}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-sm text-gray-700">
+                    <td className="px-5 py-4 text-sm text-gray-700 font-medium">
                       {[u.first_name, u.last_name].filter(Boolean).join(' ') || '—'}
                     </td>
-                    <td className="px-5 py-4 text-sm text-gray-700 font-mono">{u.username}</td>
-                    <td className="px-5 py-4 text-sm text-gray-600">{u.email || '—'}</td>
-                    <td className="px-5 py-4 text-xs text-gray-500">{formatDate(u.last_login)}</td>
+                    <td className="px-5 py-4">
+                      <span className="text-sm text-gray-700 font-mono bg-gray-100 px-2 py-0.5 rounded-md">{u.username}</span>
+                    </td>
+                    <td className="px-5 py-4 text-sm text-gray-500">{u.email || '—'}</td>
+                    <td className="px-5 py-4 text-xs text-gray-400 tabular-nums">{formatDate(u.last_login)}</td>
                     <td className="px-5 py-4">{statusBadge(u.status)}</td>
                     <td className="px-5 py-4">
-                      <div className="flex items-center gap-1">
-                        {/* Pause — only when Active */}
+                      <div className="flex items-center gap-0.5">
                         {u.status === 'Active' && (
                           <button onClick={() => doAction(u.id, 'pause')}
                             disabled={actionLoading === u.id + 'pause'}
                             title="Pause account"
-                            className="p-2 text-yellow-500 hover:bg-yellow-50 rounded-lg transition-all disabled:opacity-50">
+                            className="p-2 text-amber-500 hover:bg-amber-50 rounded-lg transition-all disabled:opacity-40">
                             {actionLoading === u.id + 'pause' ? <Loader2 size={15} className="animate-spin" /> : <PauseCircle size={15} />}
                           </button>
                         )}
-                        {/* Deactivate — only when Active or Paused */}
                         {(u.status === 'Active' || u.status === 'Paused') && (
                           <button onClick={() => doAction(u.id, 'deactivate')}
                             disabled={actionLoading === u.id + 'deactivate'}
                             title="Deactivate account"
-                            className="p-2 text-orange-500 hover:bg-orange-50 rounded-lg transition-all disabled:opacity-50">
+                            className="p-2 text-orange-500 hover:bg-orange-50 rounded-lg transition-all disabled:opacity-40">
                             {actionLoading === u.id + 'deactivate' ? <Loader2 size={15} className="animate-spin" /> : <PowerOff size={15} />}
                           </button>
                         )}
-                        {/* Activate — only when Inactive or Paused */}
                         {(u.status === 'Inactive' || u.status === 'Paused') && (
                           <button onClick={() => doAction(u.id, 'activate')}
                             disabled={actionLoading === u.id + 'activate'}
                             title="Activate account"
-                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-all disabled:opacity-50">
+                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all disabled:opacity-40">
                             {actionLoading === u.id + 'activate' ? <Loader2 size={15} className="animate-spin" /> : <Power size={15} />}
                           </button>
                         )}
@@ -372,7 +338,7 @@ function MonitorUsageTab({ getAuthHeaders }) {
                           }}
                           disabled={actionLoading === u.id + 'delete'}
                           title="Delete account"
-                          className="p-2 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all disabled:opacity-50">
+                          className="p-2 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all disabled:opacity-40">
                           {actionLoading === u.id + 'delete' ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
                         </button>
                       </div>
@@ -389,80 +355,66 @@ function MonitorUsageTab({ getAuthHeaders }) {
 }
 
 // ── Master Settings tab ────────────────────────────────────────────────────────
-function MasterSettingsTab({ getAuthHeaders }) {
+function MasterSettingsTab() {
+  const fetchSettings = useCallback(() => adminApi.getSettings(), []);
+  const { data: settingsData, loading: settingsLoading } = useApi(fetchSettings, CACHE_KEYS.ADMIN_SETTINGS);
   const [settings, setSettings] = useState({ postmark_sender_email: '', postmark_sender_name: '', postmark_configured: false });
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState(null);
-
-  const showToast = (msg, type = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 4000);
-  };
+  const { toast, showToast } = useToast();
 
   useEffect(() => {
-    fetch('/api/admin/settings', { headers: getAuthHeaders() })
-      .then((r) => r.json())
-      .then((d) => setSettings(d))
-      .catch(() => showToast('Failed to load settings', 'error'))
-      .finally(() => setLoading(false));
-  }, []);
+    if (settingsData) setSettings(settingsData);
+  }, [settingsData]);
 
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch('/api/admin/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({
-          postmark_sender_email: settings.postmark_sender_email,
-          postmark_sender_name:  settings.postmark_sender_name,
-        }),
+      await adminApi.saveSettings({
+        postmark_sender_email: settings.postmark_sender_email,
+        postmark_sender_name: settings.postmark_sender_name,
       });
-      if (res.ok) showToast('Settings saved successfully');
-      else showToast('Failed to save settings', 'error');
-    } catch {
-      showToast('Network error', 'error');
+      showToast('Settings saved successfully');
+    } catch (err) {
+      showToast(err.message || 'Failed to save settings', 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) return (
-    <div className="flex items-center justify-center p-16 text-gray-400 gap-2">
+  if (settingsLoading) return (
+    <div className="flex items-center justify-center p-16 text-gray-400 gap-2 text-sm">
       <Loader2 className="animate-spin" size={18} /> Loading settings...
     </div>
   );
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {toast && (
-        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium border
-          ${toast.type === 'success' ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-800 border-red-200'}`}>
-          {toast.type === 'success' ? <CheckCircle size={16} /> : <XCircle size={16} />}
-          {toast.msg}
-        </div>
-      )}
+    <div className="max-w-2xl mx-auto space-y-5">
+      <Toast toast={toast} />
 
-      {/* Postmark connection status */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-          <h2 className="font-bold text-[#001F3F] flex items-center gap-2">
-            <Send size={16} /> Postmark Email Service
-          </h2>
-          <p className="text-xs text-gray-500 mt-0.5">System-wide email delivery via Postmark</p>
+        <div className="px-7 py-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white flex items-center gap-3">
+          <div className="w-9 h-9 bg-[#001F3F]/8 rounded-xl flex items-center justify-center">
+            <Send size={16} className="text-[#001F3F]" />
+          </div>
+          <div>
+            <h2 className="font-bold text-[#001F3F] text-base">Postmark Email Service</h2>
+            <p className="text-xs text-gray-500 mt-0.5">System-wide email delivery configuration</p>
+          </div>
         </div>
-        <div className="p-6">
-          <div className="flex items-center gap-3 p-4 rounded-xl border border-gray-100 bg-gray-50 mb-6">
-            <div className={`w-3 h-3 rounded-full ${settings.postmark_configured ? 'bg-green-500' : 'bg-red-400'}`} />
+
+        <div className="p-7 space-y-5">
+          <div className={`flex items-center gap-3 p-4 rounded-xl border ${
+            settings.postmark_configured ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+          }`}>
+            <div className={`w-3 h-3 rounded-full shrink-0 ${settings.postmark_configured ? 'bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.5)]' : 'bg-red-400'}`} />
             <div>
-              <p className="text-sm font-semibold text-gray-800">
+              <p className={`text-sm font-bold ${settings.postmark_configured ? 'text-green-800' : 'text-red-700'}`}>
                 {settings.postmark_configured ? 'Postmark Connected' : 'Postmark Not Configured'}
               </p>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className={`text-xs mt-0.5 ${settings.postmark_configured ? 'text-green-600' : 'text-red-500'}`}>
                 {settings.postmark_configured
-                  ? 'API key is set. Welcome emails will be sent automatically.'
+                  ? 'API key is set — welcome emails will be sent automatically.'
                   : 'Set POSTMARK_API_KEY in the backend .env file to enable email delivery.'}
               </p>
             </div>
@@ -477,10 +429,10 @@ function MasterSettingsTab({ getAuthHeaders }) {
                   type="text" value={settings.postmark_sender_name}
                   onChange={(e) => setSettings((s) => ({ ...s, postmark_sender_name: e.target.value }))}
                   placeholder="BallotDA"
-                  className="w-full h-11 pl-10 pr-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:bg-white focus:border-[#001F3F]/40 transition-all"
+                  className="w-full h-11 pl-10 pr-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:bg-white focus:border-[#001F3F]/40 focus:ring-4 focus:ring-[#001F3F]/5 transition-all"
                 />
               </div>
-              <p className="text-xs text-gray-400">Displayed as the "From" name in outgoing emails</p>
+              <p className="text-xs text-gray-400">Displayed as the "From" name in all outgoing emails</p>
             </div>
 
             <div className="space-y-1.5">
@@ -491,39 +443,38 @@ function MasterSettingsTab({ getAuthHeaders }) {
                   type="email" value={settings.postmark_sender_email}
                   onChange={(e) => setSettings((s) => ({ ...s, postmark_sender_email: e.target.value }))}
                   placeholder="noreply@ballotda.com"
-                  className="w-full h-11 pl-10 pr-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:bg-white focus:border-[#001F3F]/40 transition-all"
+                  className="w-full h-11 pl-10 pr-4 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:bg-white focus:border-[#001F3F]/40 focus:ring-4 focus:ring-[#001F3F]/5 transition-all"
                 />
               </div>
               <p className="text-xs text-gray-400">Must be a verified sender address in your Postmark account</p>
             </div>
 
-            <div className="pt-2">
-              <button type="submit" disabled={saving}
-                className="w-full h-11 bg-[#001F3F] hover:bg-[#002d5c] disabled:bg-gray-300 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2">
-                {saving ? <Loader2 className="animate-spin" size={16} /> : <><Settings size={16} /> Save Settings</>}
-              </button>
-            </div>
+            <button type="submit" disabled={saving}
+              className="w-full h-11 bg-gradient-to-r from-[#001F3F] to-[#002d5c] hover:from-[#002d5c] hover:to-[#003d7a] disabled:from-gray-300 disabled:to-gray-300 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2 shadow-md shadow-[#001F3F]/15">
+              {saving ? <Loader2 className="animate-spin" size={16} /> : <><Settings size={16} /> Save Settings</>}
+            </button>
           </form>
         </div>
       </div>
 
-      {/* Info card */}
-      <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5">
-        <p className="text-sm font-semibold text-blue-800 mb-1">About Master Settings</p>
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-5">
+        <p className="text-sm font-bold text-blue-800 mb-1.5 flex items-center gap-2">
+          <Database size={14} /> About Platform Settings
+        </p>
         <p className="text-xs text-blue-600 leading-relaxed">
-          These are platform-level settings that apply globally across all customers.
-          The Postmark API key is stored securely in the backend environment and is never
-          exposed to the frontend. Customer-specific provider configurations are managed
-          by each customer from their own Configuration page.
+          These settings apply globally across all customer accounts. The Postmark API key is
+          stored securely in the backend environment and is never exposed to the frontend.
+          Customer-specific provider configurations are managed by each customer from their
+          own Configuration page.
         </p>
       </div>
     </div>
   );
 }
 
-// ── Main AdminPanel component ──────────────────────────────────────────────────
+// ── Main AdminPanel ────────────────────────────────────────────────────────────
 const AdminPanel = () => {
-  const { user, logout, getAuthHeaders } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState('create');
 
@@ -534,85 +485,139 @@ const AdminPanel = () => {
     navigate('/');
   };
 
+  const tabs = [
+    { key: 'create',   label: 'Create Customer', Icon: UserPlus  },
+    { key: 'monitor',  label: 'Monitor Accounts', Icon: Activity  },
+    { key: 'settings', label: 'Settings',         Icon: Settings  },
+  ];
+
+  // ── Login state ──────────────────────────────────────────────────────────────
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] flex flex-col">
-        <nav className="w-full bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between shadow-sm">
-          <div className="flex items-center space-x-3">
-            <div className="bg-[#001F3F] p-2 rounded-xl">
-              <img src={bdaLogo} alt="BallotDA" className="h-7 w-auto object-contain" />
-            </div>
-            <div>
-              <span className="font-bold text-[#001F3F]">BallotDA</span>
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider">Platform Administration</p>
+      <div className="min-h-screen flex">
+        {/* Left panel */}
+        <div className="hidden lg:flex lg:w-[45%] bg-[#001F3F] flex-col p-12 relative overflow-hidden">
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute -top-20 -left-20 w-72 h-72 bg-blue-500/20 rounded-full blur-[100px]" />
+            <div className="absolute bottom-0 right-0 w-80 h-80 bg-indigo-500/15 rounded-full blur-[120px]" />
+            <div className="absolute inset-0 opacity-[0.04]" style={{
+              backgroundImage: 'radial-gradient(circle at 1.5px 1.5px, white 1.5px, transparent 0)',
+              backgroundSize: '32px 32px',
+            }} />
+          </div>
+
+          <div className="relative z-10 flex-1 flex flex-col justify-center">
+            <img src={bdaLogo} alt="BallotDA" className="h-12 w-auto object-contain mb-8 self-start" />
+
+            <h1 className="text-4xl font-extrabold text-white mb-3 leading-tight">
+              Platform<br />
+              <span className="text-blue-300">Administration</span>
+            </h1>
+            <p className="text-blue-200/70 text-base mb-10 leading-relaxed">
+              Secure management console for the BallotDA Outreach Platform.
+            </p>
+
+            <div className="space-y-4">
+              {[
+                { Icon: ShieldCheck, title: 'Role-based Access',    desc: 'Only authorized administrators can access this portal.' },
+                { Icon: Users,       title: 'Customer Management',  desc: 'Create and manage all customer accounts from one place.' },
+                { Icon: BarChart3,   title: 'Usage Monitoring',     desc: 'Track activity and account status across all organizations.' },
+              ].map(({ Icon, title, desc }) => (
+                <div key={title} className="flex items-start gap-4 group">
+                  <div className="w-10 h-10 bg-white/8 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-white/12 transition-colors">
+                    <Icon size={18} className="text-blue-300" />
+                  </div>
+                  <div>
+                    <p className="text-white font-semibold text-sm">{title}</p>
+                    <p className="text-blue-200/60 text-xs mt-0.5 leading-relaxed">{desc}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-          <button onClick={() => navigate('/login')} className="text-sm text-gray-500 hover:text-[#001F3F] font-medium">
-            Customer Login →
-          </button>
-        </nav>
 
-        <div className="flex-1 flex items-center justify-center px-4 py-12">
-          <AdminLoginForm onSuccess={() => {}} />
+          <div className="relative z-10 pt-8 border-t border-white/8">
+            <p className="text-blue-300/50 text-xs">© 2026 BallotDA Enterprise</p>
+          </div>
         </div>
 
-        <p className="text-center pb-6 text-xs text-gray-400">© 2026 BallotDA Enterprise. All rights reserved.</p>
+        {/* Right panel */}
+        <div className="flex-1 bg-[#F8FAFC] flex flex-col">
+          <div className="px-8 py-4 flex items-center justify-between border-b border-gray-100 bg-white">
+            <img src={bdaLogo} alt="BallotDA" className="h-8 w-auto object-contain lg:hidden" />
+            <div className="hidden lg:block" />
+            <Link to="/login"
+              className="text-sm text-gray-500 hover:text-[#001F3F] font-semibold flex items-center gap-1.5 transition-colors">
+              Customer Login <ChevronRight size={14} />
+            </Link>
+          </div>
+
+          <div className="flex-1 flex items-center justify-center px-6 py-12">
+            <AdminLoginForm onSuccess={() => {}} />
+          </div>
+        </div>
       </div>
     );
   }
 
+  // ── Authenticated state ──────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col">
       {/* Header */}
-      <nav className="w-full bg-white border-b border-gray-100 px-6 py-3.5 flex items-center justify-between shadow-sm sticky top-0 z-10">
-        <div className="flex items-center space-x-3">
-          <div className="bg-[#001F3F] p-2 rounded-xl">
-            <img src={bdaLogo} alt="BallotDA" className="h-7 w-auto object-contain" />
-          </div>
-          <div>
-            <span className="font-bold text-[#001F3F]">BallotDA</span>
-            <p className="text-[10px] text-gray-400 uppercase tracking-wider">Platform Administration</p>
+      <nav className="w-full bg-white border-b border-gray-100 px-6 lg:px-8 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-sm">
+        <div className="flex items-center gap-4">
+          <img src={bdaLogo} alt="BallotDA" className="h-9 w-auto object-contain" />
+          <div className="hidden sm:flex items-center gap-2">
+            <div className="w-px h-5 bg-gray-200" />
+            <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+              Platform Administration
+            </span>
           </div>
         </div>
+
         <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-500 hidden sm:block">
-            Signed in as <strong className="text-[#001F3F]">{user?.username}</strong>
-          </span>
-          <button onClick={handleLogout}
-            className="text-sm font-semibold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all">
-            Logout
+          <div className="hidden sm:flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
+            <div className="w-6 h-6 bg-[#001F3F] rounded-lg flex items-center justify-center">
+              <ShieldCheck size={13} className="text-blue-300" />
+            </div>
+            <span className="text-sm text-gray-500">
+              <strong className="text-[#001F3F] font-bold">{user?.username}</strong>
+            </span>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-red-600 border border-gray-200 hover:border-red-200 hover:bg-red-50 px-3.5 py-2 rounded-xl transition-all"
+          >
+            <LogOut size={15} />
+            <span className="hidden sm:inline">Logout</span>
           </button>
         </div>
       </nav>
 
       {/* Tabs */}
-      <div className="bg-white border-b border-gray-100 px-6">
+      <div className="bg-white border-b border-gray-100 px-6 lg:px-8">
         <div className="flex gap-1 max-w-5xl mx-auto">
-          {[
-            { key: 'create',  label: 'Create User',    Icon: UserPlus },
-            { key: 'monitor', label: 'Monitor Usage',  Icon: Activity },
-            { key: 'settings',label: 'Master Settings',Icon: Settings },
-          ].map(({ key, label, Icon }) => (
+          {tabs.map(({ key, label, Icon }) => (
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`flex items-center gap-2 px-5 py-4 text-sm font-bold border-b-2 transition-colors
+              className={`flex items-center gap-2 px-5 py-4 text-sm font-bold border-b-2 transition-all
                 ${tab === key
                   ? 'border-[#001F3F] text-[#001F3F]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                  : 'border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200'}`}
             >
-              <Icon size={16} />
+              <Icon size={15} />
               {label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 px-6 py-8 max-w-5xl mx-auto w-full">
-        {tab === 'create'   && <CreateUserTab   getAuthHeaders={getAuthHeaders} />}
-        {tab === 'monitor'  && <MonitorUsageTab getAuthHeaders={getAuthHeaders} />}
-        {tab === 'settings' && <MasterSettingsTab getAuthHeaders={getAuthHeaders} />}
+      {/* Page content */}
+      <div className="flex-1 px-6 lg:px-8 py-8 max-w-5xl mx-auto w-full">
+        {tab === 'create'   && <CreateCustomerTab />}
+        {tab === 'monitor'  && <MonitorAccountsTab />}
+        {tab === 'settings' && <MasterSettingsTab />}
       </div>
     </div>
   );

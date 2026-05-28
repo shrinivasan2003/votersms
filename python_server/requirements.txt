@@ -8,3 +8,4 @@ python-dotenv
 PyJWT
 twilio
 httpx
+slowapi

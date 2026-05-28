@@ -27,12 +27,13 @@
     <meta name="twitter:description" content="Manage voters, dispatch SMS/Email campaigns." />
     <meta name="twitter:image" content="https://votersms.ballotda.com/og-image.jpg" />
 
-    <!-- Security Headers (must also be set via HTTP response headers) -->
-    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
-    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin" />
-    <meta http-equiv="Permissions-Policy" content="geolocation=(), microphone=(), camera=()" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' http://localhost:* https://localhost:* http://127.0.0.1:* https://127.0.0.1:* http://votersms.ballotda.com https://votersms.ballotda.com http://*.ballotda.com https://*.ballotda.com; base-uri 'self'; form-action 'self';" />
+    <!--
+      Security headers — X-Frame-Options, HSTS, X-Content-Type-Options, Referrer-Policy
+      are also sent as HTTP response headers by the FastAPI security-headers middleware.
+      The CSP meta tag below provides a client-side fallback; the authoritative policy
+      should be set at the reverse proxy (nginx/Caddy) level in production.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://votersms.ballotda.com https://*.ballotda.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none';" />
 
     <!-- JSON‑LD Structured Data (Organization) -->
     <script type="application/ld+json">

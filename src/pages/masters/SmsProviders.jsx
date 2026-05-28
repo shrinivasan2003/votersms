@@ -20,7 +20,6 @@ const SmsProviders = () => {
     try {
       const res = await fetch(API_URL);
       const data = await res.json();
-      console.log('Fetched providers:', data);
       setProviders(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch providers:', err);
@@ -67,7 +66,6 @@ const SmsProviders = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Submitting SMS Provider...');
     const formData = new FormData(e.target);
     const data = {
       name: formData.get('name'),
@@ -80,8 +78,6 @@ const SmsProviders = () => {
       status: formData.get('active') === 'on' ? 'Active' : 'Inactive'
     };
 
-    console.log('Data to send:', data);
-
     try {
       const method = editingRow ? 'PUT' : 'POST';
       const url = editingRow ? `${API_URL}/${editingRow.id}` : API_URL;
@@ -93,7 +89,6 @@ const SmsProviders = () => {
       });
 
       if (res.ok) {
-        console.log('Save successful!');
         alert(`Provider saved successfully!`);
         fetchProviders();
         handleBack();

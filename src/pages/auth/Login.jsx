@@ -26,8 +26,8 @@ const Login = () => {
         return;
       }
       navigate('/dashboard');
-    } catch {
-      setError('Invalid credentials');
+    } catch (err) {
+      setError(err.message || 'Invalid credentials');
     } finally {
       setLoading(false);
     }
@@ -48,8 +48,8 @@ const Login = () => {
           </div>
 
           <h1 className="text-4xl lg:text-5xl font-bold mb-4 tracking-tight leading-tight">
-            Civic Engagement <br />
-            <span className="text-blue-400">Portal</span>
+            Outreach <br />
+            <span className="text-blue-400">Platform</span>
           </h1>
 
           <div className="space-y-6 mt-8 max-w-md">
@@ -107,7 +107,7 @@ const Login = () => {
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-600 ml-1">Username</label>
+                  <label className="text-sm font-bold text-gray-600 ml-1">Username or Email</label>
                   <div className="relative group">
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#001F3F] transition-colors">
                       <User size={18} />
@@ -117,14 +117,19 @@ const Login = () => {
                       required
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      placeholder="your_username"
+                      placeholder="username or email"
                       className="w-full h-12 pl-12 pr-4 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:bg-white focus:border-[#001F3F]/30 focus:ring-4 focus:ring-[#001F3F]/5 transition-all text-gray-900 placeholder:text-gray-400"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-gray-600 ml-1">Password</label>
+                  <div className="flex justify-between items-center ml-1">
+                    <label className="text-sm font-bold text-gray-600">Password</label>
+                    <Link to="/forgot-password" className="text-xs text-[#001F3F] hover:underline font-medium">
+                      Forgot password?
+                    </Link>
+                  </div>
                   <div className="relative group">
                     <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#001F3F] transition-colors">
                       <Lock size={18} />
