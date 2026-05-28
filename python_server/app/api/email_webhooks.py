@@ -13,6 +13,7 @@ For local dev, expose FastAPI with:
   ngrok http 8000
 """
 import os
+import json
 import logging
 from fastapi import APIRouter, HTTPException, Request, Query, Depends
 from sqlalchemy import text
@@ -24,16 +25,6 @@ router = APIRouter()
 
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
-# Postmark RecordType  →  our canonical event_type
-_EVENT_MAP = {
-    "Open": "open",
-    "Click": "click",
-    "Bounce": "bounce",
-    "SpamComplaint": "spam",
-    "Delivery": "delivery",
-    "SubscriptionChange": "unsubscribe",
-}
-
 
 def _get_session():
     db = SessionLocal()
@@ -41,6 +32,178 @@ def _get_session():
         yield db
     finally:
         db.close()
+
+
+def _resolve_job_id(db: Session, message_id: str):
+    """Look up our internal job_id from the Postmark MessageID."""
+    if not message_id:
+        return None
+    row = db.execute(
+        text("SELECT job_id FROM email_job_messages WHERE postmark_message_id = :mid"),
+        {"mid": message_id},
+    ).fetchone()
+    return row[0] if row else None
+
+
+def _insert_event(db: Session, params: dict):
+    """
+    Insert a row into email_events.
+    Columns introduced in v2 migration (raw_payload, bounce_type,
+    bounce_description) are included; older installs without the migration
+    will fail gracefully — the exception is caught by the caller.
+    """
+    db.execute(
+        text("""
+            INSERT INTO email_events
+                (postmark_message_id, job_id, recipient_email, event_type,
+                 is_first_event, click_url, platform, client_name, os_name,
+                 read_seconds, occurred_at,
+                 raw_payload, bounce_type, bounce_description)
+            VALUES
+                (:mid, :job_id, :recipient, :event_type,
+                 :is_first, :click_url, :platform, :client_name, :os_name,
+                 :read_seconds, :occurred_at,
+                 :raw_payload, :bounce_type, :bounce_description)
+        """),
+        params,
+    )
+    db.commit()
+
+
+def _base_params(payload: dict, db: Session) -> dict:
+    """Fields shared by every event type."""
+    message_id = payload.get("MessageID", "")
+    return {
+        "mid": message_id,
+        "job_id": _resolve_job_id(db, message_id),
+        "raw_payload": json.dumps(payload),
+        # per-type handlers override these as needed
+        "recipient": "",
+        "event_type": "unknown",
+        "is_first": 0,
+        "click_url": None,
+        "platform": None,
+        "client_name": None,
+        "os_name": None,
+        "read_seconds": None,
+        "occurred_at": None,
+        "bounce_type": None,
+        "bounce_description": None,
+    }
+
+
+# ─── Per-type handlers ────────────────────────────────────────────────────────
+
+def _handle_delivery(payload: dict, db: Session):
+    params = _base_params(payload, db)
+    params.update(
+        event_type="delivery",
+        recipient=payload.get("Recipient") or payload.get("Email") or "",
+        occurred_at=payload.get("DeliveredAt") or payload.get("ReceivedAt"),
+    )
+    _insert_event(db, params)
+
+
+def _handle_open(payload: dict, db: Session):
+    client = payload.get("Client") or {}
+    os_info = payload.get("OS") or {}
+    params = _base_params(payload, db)
+    params.update(
+        event_type="open",
+        recipient=payload.get("Recipient") or "",
+        occurred_at=payload.get("ReceivedAt"),
+        is_first=1 if payload.get("FirstOpen") else 0,
+        platform=payload.get("Platform"),
+        client_name=client.get("Name"),
+        os_name=os_info.get("Name"),
+        read_seconds=payload.get("ReadSeconds"),
+    )
+    _insert_event(db, params)
+
+
+def _handle_click(payload: dict, db: Session):
+    client = payload.get("Client") or {}
+    os_info = payload.get("OS") or {}
+    params = _base_params(payload, db)
+    params.update(
+        event_type="click",
+        recipient=payload.get("Recipient") or "",
+        occurred_at=payload.get("ReceivedAt"),
+        is_first=1 if payload.get("FirstClick") else 0,
+        click_url=payload.get("OriginalLink"),
+        platform=payload.get("Platform"),
+        client_name=client.get("Name"),
+        os_name=os_info.get("Name"),
+    )
+    _insert_event(db, params)
+
+
+def _handle_bounce(payload: dict, db: Session):
+    params = _base_params(payload, db)
+    params.update(
+        event_type="bounce",
+        # Bounce events use Email, not Recipient
+        recipient=payload.get("Email") or payload.get("Recipient") or "",
+        occurred_at=payload.get("BouncedAt") or payload.get("ReceivedAt"),
+        bounce_type=str(payload.get("Type", ""))[:60] if payload.get("Type") is not None else None,
+        bounce_description=payload.get("Description"),
+    )
+    _insert_event(db, params)
+
+
+def _handle_spam(payload: dict, db: Session):
+    params = _base_params(payload, db)
+    params.update(
+        event_type="spam",
+        # SpamComplaint also uses Email
+        recipient=payload.get("Email") or payload.get("Recipient") or "",
+        occurred_at=payload.get("BouncedAt") or payload.get("ReceivedAt"),
+        bounce_type=str(payload.get("Type", ""))[:60] if payload.get("Type") is not None else None,
+    )
+    _insert_event(db, params)
+
+
+def _handle_subscription_change(payload: dict, db: Session):
+    params = _base_params(payload, db)
+    params.update(
+        event_type="unsubscribe",
+        recipient=payload.get("Recipient") or payload.get("Email") or "",
+        occurred_at=payload.get("ChangedAt") or payload.get("ReceivedAt"),
+    )
+    _insert_event(db, params)
+
+
+def _handle_unknown(payload: dict, db: Session):
+    """Persist any unrecognised event type so no data is lost."""
+    record_type = payload.get("RecordType", "unknown")
+    params = _base_params(payload, db)
+    params.update(
+        event_type=f"unknown:{record_type}"[:60],
+        recipient=(
+            payload.get("Recipient")
+            or payload.get("Email")
+            or ""
+        ),
+        occurred_at=(
+            payload.get("ReceivedAt")
+            or payload.get("DeliveredAt")
+            or payload.get("BouncedAt")
+            or payload.get("ChangedAt")
+        ),
+    )
+    _insert_event(db, params)
+
+
+# ─── Router ────────────────────────────────────────────────────────────────────
+
+_HANDLERS = {
+    "Delivery": _handle_delivery,
+    "Open": _handle_open,
+    "Click": _handle_click,
+    "Bounce": _handle_bounce,
+    "SpamComplaint": _handle_spam,
+    "SubscriptionChange": _handle_subscription_change,
+}
 
 
 @router.post("/email-webhooks")
@@ -51,84 +214,40 @@ async def receive_postmark_webhook(
 ):
     """
     Postmark calls this endpoint for every tracked event.
-    We validate the secret (optional), parse the payload, and persist the event.
+    This handler ALWAYS returns 200 so Postmark never retries unnecessarily.
+    Errors are logged but never surfaced as HTTP 500.
     """
-    # ── Secret validation (skip check if WEBHOOK_SECRET not configured) ──
+    # ── Secret validation ─────────────────────────────────────────────────────
     if WEBHOOK_SECRET and secret != WEBHOOK_SECRET:
+        # Still 401 so misconfigured URLs are obvious; doesn't affect valid events
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
+    # ── Parse JSON body ───────────────────────────────────────────────────────
     try:
         payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    except Exception as exc:
+        logger.warning(f"Postmark webhook: failed to parse JSON body: {exc}")
+        # Return 200 so Postmark doesn't keep retrying a malformed payload
+        return {"status": "error", "reason": "invalid JSON"}
 
     record_type = payload.get("RecordType", "")
-    event_type = _EVENT_MAP.get(record_type)
-    if not event_type:
-        logger.info(f"Ignored unknown Postmark RecordType: {record_type}")
-        return {"status": "ignored", "reason": f"unknown RecordType: {record_type}"}
+    logger.debug(f"Postmark webhook received: RecordType={record_type!r} payload={json.dumps(payload)}")
 
-    # MessageID is present in all event types
-    message_id = payload.get("MessageID", "")
-    if not message_id:
-        return {"status": "ignored", "reason": "no MessageID"}
-
-    # Recipient email varies by event type
-    recipient = (
-        payload.get("Recipient")          # Open, Click
-        or payload.get("Email")           # Bounce, SpamComplaint
-        or ""
-    )
-
-    # Timestamp
-    occurred_at = (
-        payload.get("ReceivedAt")         # Open, Click, Delivery
-        or payload.get("BouncedAt")       # Bounce
-        or payload.get("ChangedAt")       # SubscriptionChange
-    )
-
-    # Resolve job_id from our messages table
-    row = db.execute(
-        text("SELECT job_id FROM email_job_messages WHERE postmark_message_id = :mid"),
-        {"mid": message_id},
-    ).fetchone()
-    job_id = row[0] if row else None
-
-    # Device / client details (Open & Click)
-    client_info = payload.get("Client") or {}
-    os_info = payload.get("OS") or {}
+    # ── Dispatch to per-type handler ──────────────────────────────────────────
+    handler = _HANDLERS.get(record_type, _handle_unknown)
 
     try:
-        db.execute(
-            text("""
-                INSERT INTO email_events
-                    (postmark_message_id, job_id, recipient_email, event_type,
-                     is_first_event, click_url, platform, client_name, os_name,
-                     read_seconds, occurred_at)
-                VALUES
-                    (:mid, :job_id, :recipient, :event_type,
-                     :is_first, :click_url, :platform, :client_name, :os_name,
-                     :read_seconds, :occurred_at)
-            """),
-            {
-                "mid": message_id,
-                "job_id": job_id,
-                "recipient": recipient,
-                "event_type": event_type,
-                "is_first": 1 if (payload.get("FirstOpen") or payload.get("FirstClick")) else 0,
-                "click_url": payload.get("OriginalLink"),
-                "platform": payload.get("Platform"),
-                "client_name": client_info.get("Name"),
-                "os_name": os_info.get("Name"),
-                "read_seconds": payload.get("ReadSeconds"),
-                "occurred_at": occurred_at,
-            },
+        handler(payload, db)
+        logger.info(
+            f"email_events: stored '{record_type}' for MessageID={payload.get('MessageID')!r}"
         )
-        db.commit()
-        logger.info(f"Stored {event_type} event for MessageID {message_id}")
-    except Exception as e:
+        return {"status": "ok", "record_type": record_type}
+    except Exception as exc:
         db.rollback()
-        logger.error(f"Failed to store webhook event: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-    return {"status": "ok", "event_type": event_type, "job_id": job_id}
+        logger.error(
+            f"email_events: DB error storing '{record_type}' "
+            f"MessageID={payload.get('MessageID')!r}: {exc}",
+            exc_info=True,
+        )
+        # Always 200 — Postmark must not retry because of our DB issues
+        return {"status": "error", "reason": "db_error", "record_type": record_type}
