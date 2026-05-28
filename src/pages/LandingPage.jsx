@@ -21,7 +21,7 @@ const features = [
   { icon: BarChart2,  color: '#F59E0B', bg: 'bg-amber-50',  label: 'Real-Time Analytics',      desc: 'Track delivery, open rates, and engagement live. Make data-driven decisions instantly.' },
   { icon: Bell,       color: '#EC4899', bg: 'bg-pink-50',   label: 'Instant Notifications',    desc: 'Get notified the moment a campaign completes. Never miss a delivery update again.' },
   { icon: Lock,       color: '#001F3F', bg: 'bg-slate-50',  label: 'Organization Isolation',   desc: "Each organization's data is fully encrypted and isolated. No cross-tenant access — ever." },
-  { icon: TrendingUp, color: '#10B981', bg: 'bg-emerald-50', label: 'Scalable at Any Size',    desc: 'From hundreds to hundreds of thousands of voters — scales with your campaign seamlessly.' },
+  { icon: TrendingUp, color: '#10B981', bg: 'bg-emerald-50', label: 'Scalable at Any Size',    desc: 'From hundreds to hundreds of thousands of recipients — scales with your campaign seamlessly.' },
 ];
 
 const steps = [
@@ -153,14 +153,14 @@ const LandingPage = () => (
             </div>
 
             <h1 className="text-[32px] sm:text-[44px] lg:text-[52px] xl:text-[58px] font-extrabold leading-[1.05] mb-4 sm:mb-5 tracking-tight">
-              Win More Votes with
+              Reach More People with
               <span className="block bg-gradient-to-r from-blue-300 via-indigo-300 to-violet-300 bg-clip-text text-transparent mt-1">
                 Smarter Outreach
               </span>
             </h1>
 
             <p className="text-blue-200/80 text-base sm:text-lg leading-relaxed mb-6 sm:mb-8 max-w-lg mx-auto lg:mx-0">
-              The all-in-one platform for political campaigns and civic organizations to send SMS, Email, and WhatsApp campaigns — with real-time analytics and airtight data security.
+              The all-in-one platform for businesses, institutions, nonprofits, and organizations to send SMS, Email, and WhatsApp campaigns with real-time analytics, audience management, and secure data protection.
             </p>
 
             <div className="flex flex-wrap justify-center lg:justify-start gap-2 mb-7 sm:mb-9">
@@ -357,7 +357,7 @@ const LandingPage = () => (
       <div className="max-w-2xl mx-auto relative z-10">
         <div className="inline-flex items-center gap-2 bg-amber-400/10 border border-amber-400/20 rounded-full px-4 py-1.5 text-xs font-semibold text-amber-300 mb-5">
           <Zap size={12} fill="currentColor" />
-          Ready to reach more voters?
+          Ready to reach more recipients?
         </div>
 
         <h2 className="text-2xl sm:text-3xl lg:text-[42px] font-extrabold text-white mb-3 sm:mb-4 leading-tight">

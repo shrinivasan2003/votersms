@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
+from app.utils.limits import check_limit
 
 router = APIRouter()
 
@@ -57,6 +58,14 @@ def create_voter(
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
+        cid = current_user.customer_id
+        if cid is not None:
+            current_count = db.execute(
+                text("SELECT COUNT(*) AS c FROM voters WHERE customer_id=:cid"),
+                {"cid": cid},
+            ).fetchone().c
+            check_limit(db, cid, "max_voters", current_count, "Voter")
+
         result = db.execute(
             text("INSERT INTO voters (first_name, last_name, email, phone, precinct_id, status, customer_id) "
                  "VALUES (:first_name, :last_name, :email, :phone, :precinct_id, :status, :customer_id)"),
@@ -69,6 +78,8 @@ def create_voter(
         )
         db.commit()
         return {"id": result.lastrowid, **req}
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -123,6 +134,12 @@ def bulk_voters_upload(
         raise HTTPException(status_code=400, detail={'message': 'No voter data provided'})
     try:
         cid = current_user.customer_id
+        if cid is not None:
+            current_count = db.execute(
+                text("SELECT COUNT(*) AS c FROM voters WHERE customer_id=:cid"),
+                {"cid": cid},
+            ).fetchone().c
+            check_limit(db, cid, "max_voters", current_count + len(voters) - 1, "Voter")
         cid_filter = "AND customer_id=:cid" if cid else ""
         precincts_result = db.execute(
             text(f"SELECT id, name, code FROM precincts WHERE 1=1 {cid_filter}"),
@@ -165,6 +182,8 @@ def bulk_voters_upload(
             "inserted": inserted_count,
             "failed": len(voters) - inserted_count,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

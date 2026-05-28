@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
+from app.utils.limits import check_limit
 
 router = APIRouter()
 
@@ -71,6 +72,14 @@ def create_whatsapp_job(
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
+        cid = current_user.customer_id
+        if cid is not None:
+            current_count = db.execute(
+                text("SELECT COUNT(*) AS c FROM whatsapp_jobs WHERE customer_id=:cid"),
+                {"cid": cid},
+            ).fetchone().c
+            check_limit(db, cid, "max_whatsapp_jobs", current_count, "WhatsApp Job")
+
         result = db.execute(
             text("""
                 INSERT INTO whatsapp_jobs
@@ -91,6 +100,8 @@ def create_whatsapp_job(
         )
         db.commit()
         return {"id": result.lastrowid, **req}
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

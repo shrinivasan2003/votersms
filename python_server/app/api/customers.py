@@ -79,6 +79,13 @@ def create_customer(
     )
     db.commit()
 
+    # Auto-create default limits row for the new customer
+    db.execute(
+        text("INSERT IGNORE INTO customer_limits (customer_id) VALUES (:cid)"),
+        {"cid": customer_id},
+    )
+    db.commit()
+
     # Send welcome email (non-blocking — failure doesn't abort the request)
     email_sent = send_welcome_email(
         to_email=payload.email,

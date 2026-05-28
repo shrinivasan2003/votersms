@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   Home, Users, MessageSquare, Mail,
-  MessageCircle, Send, MailOpen,
+  MessageCircle, Send, MailOpen, Inbox,
   Play, FileText,
   ChevronDown, ChevronRight, Package, RefreshCw, Building2, Settings2
 } from 'lucide-react';
@@ -72,7 +72,7 @@ const Sidebar = ({ isCollapsed, onItemClick, onExpand }) => {
   useEffect(() => {
     if (['/organization', '/recipients', '/voters', '/sms-templates', '/email-templates', '/whatsapp-templates'].includes(location.pathname)) {
       setOpenGroup('Masters');
-    } else if (['/sms-jobs', '/email-jobs', '/whatsapp-jobs', '/process-job'].includes(location.pathname)) {
+    } else if (['/sms-jobs', '/email-jobs', '/email-replies', '/whatsapp-jobs', '/process-job'].includes(location.pathname)) {
       setOpenGroup('Transactions');
     } else if (['/sms-delivery-report', '/email-delivery-report'].includes(location.pathname)) {
       setOpenGroup('Reports');
@@ -144,7 +144,8 @@ const Sidebar = ({ isCollapsed, onItemClick, onExpand }) => {
             onExpand={onExpand}
           >
             <NavItem to="/sms-jobs"      icon={Send}          label="SMS Jobs"       isCollapsed={isCollapsed} onItemClick={onItemClick} />
-            <NavItem to="/email-jobs"    icon={MailOpen}      label="Email Jobs"     isCollapsed={isCollapsed} onItemClick={onItemClick} />
+            <NavItem to="/email-jobs"     icon={MailOpen}  label="Email Jobs"     isCollapsed={isCollapsed} onItemClick={onItemClick} />
+            <NavItem to="/email-replies"  icon={Inbox}     label="Email Replies"  isCollapsed={isCollapsed} onItemClick={onItemClick} />
             <NavItem to="/whatsapp-jobs" icon={MessageCircle} label="WhatsApp Jobs"  isCollapsed={isCollapsed} onItemClick={onItemClick} />
             <NavItem to="/process-job"   icon={Play}          label="Process Jobs"   isCollapsed={isCollapsed} onItemClick={onItemClick} />
           </NavGroup>

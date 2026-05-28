@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
+from app.utils.limits import check_limit
 
 router = APIRouter()
 
@@ -41,6 +42,14 @@ def create_email_template(
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
+        cid = current_user.customer_id
+        if cid is not None:
+            current_count = db.execute(
+                text("SELECT COUNT(*) AS c FROM email_templates WHERE customer_id=:cid"),
+                {"cid": cid},
+            ).fetchone().c
+            check_limit(db, cid, "max_email_templates", current_count, "Email Template")
+
         result = db.execute(
             text("INSERT INTO email_templates (code, name, subject, body, status, customer_id) "
                  "VALUES (:code, :name, :subject, :body, :status, :customer_id)"),
@@ -50,6 +59,8 @@ def create_email_template(
         )
         db.commit()
         return {"id": result.lastrowid, **req}
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -148,6 +159,14 @@ def create_email_job(
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
+        cid = current_user.customer_id
+        if cid is not None:
+            current_count = db.execute(
+                text("SELECT COUNT(*) AS c FROM email_jobs WHERE customer_id=:cid"),
+                {"cid": cid},
+            ).fetchone().c
+            check_limit(db, cid, "max_email_jobs", current_count, "Email Job")
+
         result = db.execute(
             text("""
                 INSERT INTO email_jobs
@@ -168,6 +187,8 @@ def create_email_job(
         )
         db.commit()
         return {"id": result.lastrowid, **req}
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

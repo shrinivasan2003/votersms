@@ -30,9 +30,11 @@ from app.api import (
     sms_delivery_stats,
     process_jobs,
     email_webhooks,
+    email_inbound,
     email_analytics,
     contact_lists,
     customers,
+    customer_limits,
 )
 from app.dependencies.security import get_current_user
 from app.database import SessionLocal
@@ -54,18 +56,25 @@ def _ensure_admin_user() -> None:
     db = SessionLocal()
     try:
         row = db.execute(
-            text("SELECT id, password FROM users WHERE username=:u AND customer_id IS NULL"),
+            text("SELECT id FROM users WHERE username=:u AND customer_id IS NULL"),
             {"u": admin_username},
         ).first()
+        new_hash = hash_password(admin_password)
         if not row:
             db.execute(
                 text(
                     "INSERT INTO users (username, password, name, role, status) "
                     "VALUES (:u, :p, 'Platform Admin', 'admin', 'Active')"
                 ),
-                {"u": admin_username, "p": hash_password(admin_password)},
+                {"u": admin_username, "p": new_hash},
             )
-            db.commit()
+        else:
+            # Always sync the hash so the DB reflects the current .env password
+            db.execute(
+                text("UPDATE users SET password=:p WHERE id=:id"),
+                {"p": new_hash, "id": row.id},
+            )
+        db.commit()
     finally:
         db.close()
 
@@ -120,6 +129,7 @@ async def add_security_headers(request: Request, call_next):
 # Public routes (no JWT required)
 app.include_router(auth.router,           prefix="/api")
 app.include_router(email_webhooks.router, prefix="/api")
+app.include_router(email_inbound.router,  prefix="/api")   # Postmark inbound — public, secret-secured
 
 # Protected routes — every request must carry a valid Bearer token
 _protected = [Depends(get_current_user)]
@@ -144,6 +154,7 @@ app.include_router(process_jobs.router,       prefix="/api", dependencies=_prote
 app.include_router(email_analytics.router,    prefix="/api", dependencies=_protected)
 app.include_router(contact_lists.router,      prefix="/api", dependencies=_protected)
 app.include_router(customers.router,          prefix="/api", dependencies=_protected)
+app.include_router(customer_limits.router,    prefix="/api", dependencies=_protected)
 
 # Root
 @app.get("/")

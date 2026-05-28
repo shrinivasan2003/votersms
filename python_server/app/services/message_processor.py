@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database import SessionLocal
 from app.models import SmsJob, EmailJob, SmsProvider, EmailProvider, Precinct, Voter, SmsTemplate, EmailTemplate
+from app.utils.limits import _get_limits_row, _monthly_sum, _emails_this_month, DEFAULTS
 from twilio.rest import Client
 import httpx
 import logging
@@ -121,6 +122,20 @@ def process_sms_job(job_id: int):
             db.commit()
             return
 
+        # Monthly volume guard
+        cid = getattr(job, 'customer_id', None)
+        if cid is not None:
+            sms_used = _monthly_sum(db, "sms_jobs", cid)
+            limits    = _get_limits_row(db, cid)
+            max_sms   = limits.get("max_sms_per_month") or DEFAULTS.get("max_sms_per_month", 0)
+            if max_sms > 0 and sms_used >= max_sms:
+                logger.warning(
+                    f"SMS Job {job_id}: monthly limit reached ({sms_used}/{max_sms}) — marking Failed"
+                )
+                job.status = "Failed"
+                db.commit()
+                return
+
         twilio_client = Client(provider.account_sid, provider.auth_token)
         success_count = 0
         failed_count  = 0
@@ -212,6 +227,20 @@ def process_email_job(job_id: int):
 
         voters = _resolve_voters(db, job, "email")
 
+        # Monthly volume guard
+        email_cid = getattr(job, 'customer_id', None)
+        if email_cid is not None:
+            emails_used = _emails_this_month(db, email_cid)
+            limits      = _get_limits_row(db, email_cid)
+            max_emails  = limits.get("max_emails_per_month") or DEFAULTS.get("max_emails_per_month", 0)
+            if max_emails > 0 and emails_used >= max_emails:
+                logger.warning(
+                    f"Email Job {job_id}: monthly limit reached ({emails_used}/{max_emails}) — marking Failed"
+                )
+                job.status = "Failed"
+                db.commit()
+                return
+
         postmark_api_url = "https://api.postmarkapp.com/email"
         http_headers = {
             "Accept": "application/json",
@@ -236,6 +265,11 @@ def process_email_job(job_id: int):
                 )
                 subject = getattr(template, "subject", None) or template.name
 
+                # Build Reply-To with mailbox hash so inbound replies
+                # auto-match back to this job + voter.
+                # Format: reply+{job_id}_{voter_id}@inbound.yourdomain.com
+                import os as _os
+                _inbound_base = _os.getenv("INBOUND_EMAIL_ADDRESS", "")
                 payload = {
                     "From":          from_address,
                     "To":            voter["email"],
@@ -246,6 +280,9 @@ def process_email_job(job_id: int):
                     "TrackOpens":    True,
                     "TrackLinks":    "HtmlAndText",
                 }
+                if _inbound_base and "@" in _inbound_base:
+                    _local, _domain = _inbound_base.split("@", 1)
+                    payload["ReplyTo"] = f"{_local}+{job_id}_{voter['id']}@{_domain}"
 
                 try:
                     response = client.post(postmark_api_url, json=payload, headers=http_headers)

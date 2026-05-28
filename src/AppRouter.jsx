@@ -18,6 +18,7 @@ const EmailTemplates      = lazy(() => import('./pages/masters/EmailTemplates'))
 const WhatsappTemplates   = lazy(() => import('./pages/masters/WhatsappTemplates'));
 const SmsJobs             = lazy(() => import('./pages/transactions/SmsJobs'));
 const EmailJobs           = lazy(() => import('./pages/transactions/EmailJobs'));
+const EmailReplies        = lazy(() => import('./pages/transactions/EmailReplies'));
 const WhatsappJobs        = lazy(() => import('./pages/transactions/WhatsappJobs'));
 const ProcessJobs         = lazy(() => import('./pages/transactions/ProcessJobs'));
 const SmsDeliveryReport   = lazy(() => import('./pages/reports/SmsDeliveryReport'));
@@ -68,7 +69,8 @@ const AppRouter = () => (
 
           {/* Transactions */}
           <Route path="sms-jobs"      element={<SmsJobs />} />
-          <Route path="email-jobs"    element={<EmailJobs />} />
+          <Route path="email-jobs"     element={<EmailJobs />} />
+          <Route path="email-replies"  element={<EmailReplies />} />
           <Route path="whatsapp-jobs" element={<WhatsappJobs />} />
           <Route path="process-job"   element={<ProcessJobs />} />
 

@@ -4,13 +4,14 @@ import {
   Eye, EyeOff, Lock, User, Loader2, ShieldCheck,
   Building2, Mail, UserPlus, Activity, Trash2, PowerOff,
   CheckCircle, XCircle, Power, Settings, Send, PauseCircle,
-  LogOut, ChevronRight, Users, BarChart3, Database,
+  LogOut, ChevronRight, Users, BarChart3, Database, SlidersHorizontal, X,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../hooks/useToast';
 import { useApi } from '../../hooks/useApi';
 import { useForm } from '../../hooks/useForm';
 import { customersApi } from '../../api/customers';
+import { customerLimitsApi } from '../../api/customerLimits';
 import { adminApi } from '../../api/admin';
 import { CACHE_KEYS } from '../../config/constants';
 import FormField from '../../components/shared/FormField';
@@ -196,11 +197,179 @@ function CreateCustomerTab() {
   );
 }
 
+// ── Customer Limits Modal ──────────────────────────────────────────────────────
+const LIMIT_CONFIG = [
+  { key: 'max_voters',             usageKey: 'voters',              label: 'Voters',              section: 'Resources' },
+  { key: 'max_contact_lists',      usageKey: 'contact_lists',       label: 'Contact Lists',       section: 'Resources' },
+  { key: 'max_sms_templates',      usageKey: 'sms_templates',       label: 'SMS Templates',       section: 'Templates' },
+  { key: 'max_email_templates',    usageKey: 'email_templates',     label: 'Email Templates',     section: 'Templates' },
+  { key: 'max_whatsapp_templates', usageKey: 'whatsapp_templates',  label: 'WhatsApp Templates',  section: 'Templates' },
+  { key: 'max_sms_jobs',           usageKey: 'sms_jobs',            label: 'SMS Jobs (total)',     section: 'Jobs' },
+  { key: 'max_email_jobs',         usageKey: 'email_jobs',          label: 'Email Jobs (total)',   section: 'Jobs' },
+  { key: 'max_whatsapp_jobs',      usageKey: 'whatsapp_jobs',       label: 'WhatsApp Jobs (total)',section: 'Jobs' },
+  { key: 'max_sms_per_month',      usageKey: 'sms_this_month',      label: 'SMS / Month',         section: 'Monthly Volume' },
+  { key: 'max_emails_per_month',   usageKey: 'emails_this_month',   label: 'Emails / Month',      section: 'Monthly Volume' },
+  { key: 'max_whatsapp_per_month', usageKey: 'whatsapp_this_month', label: 'WhatsApp / Month',    section: 'Monthly Volume' },
+];
+
+function CustomerLimitsModal({ customer, onClose }) {
+  const [data, setData] = useState(null);
+  const [drafts, setDrafts] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const { toast, showToast } = useToast();
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const result = await customerLimitsApi.get(customer.customer_id);
+        setData(result);
+        // Seed drafts with current limits
+        const initial = {};
+        LIMIT_CONFIG.forEach(({ key }) => {
+          initial[key] = result.limits[key] ?? '';
+        });
+        setDrafts(initial);
+      } catch (err) {
+        showToast(err.message || 'Failed to load limits', 'error');
+      } finally {
+        setLoading(false);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customer.customer_id]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const updates = {};
+      LIMIT_CONFIG.forEach(({ key }) => {
+        const v = parseInt(drafts[key], 10);
+        if (!isNaN(v) && v >= 0) updates[key] = v;
+      });
+      await customerLimitsApi.update(customer.customer_id, updates);
+      // Refresh
+      const result = await customerLimitsApi.get(customer.customer_id);
+      setData(result);
+      showToast('Limits updated successfully');
+    } catch (err) {
+      showToast(err.message || 'Failed to update limits', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Group by section
+  const sections = [...new Set(LIMIT_CONFIG.map((c) => c.section))];
+
+  const pct = (used, max) => {
+    if (!max || max === 0) return 0;
+    return Math.min(100, Math.round((used / max) * 100));
+  };
+
+  const barColor = (p) => {
+    if (p >= 90) return 'bg-red-500';
+    if (p >= 70) return 'bg-amber-400';
+    return 'bg-blue-500';
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col border border-gray-100">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white rounded-t-2xl">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-[#001F3F]/8 rounded-xl flex items-center justify-center">
+              <SlidersHorizontal size={17} className="text-[#001F3F]" />
+            </div>
+            <div>
+              <h2 className="font-bold text-[#001F3F] text-base">Usage &amp; Limits</h2>
+              <p className="text-xs text-gray-500 mt-0.5">{customer.organization_name}</p>
+            </div>
+          </div>
+          <button onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-all">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-6">
+          {loading ? (
+            <div className="flex items-center justify-center py-16 text-gray-400 gap-2 text-sm">
+              <Loader2 className="animate-spin" size={18} /> Loading limits...
+            </div>
+          ) : (
+            <>
+              <Toast toast={toast} />
+              {sections.map((section) => (
+                <div key={section}>
+                  <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-3">{section}</h3>
+                  <div className="space-y-3">
+                    {LIMIT_CONFIG.filter((c) => c.section === section).map(({ key, usageKey, label }) => {
+                      const used = data?.usage?.[usageKey] ?? 0;
+                      const max  = parseInt(drafts[key], 10) || 0;
+                      const p    = pct(used, max);
+                      return (
+                        <div key={key} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                          <div className="flex items-center justify-between mb-2.5">
+                            <span className="text-sm font-semibold text-gray-700">{label}</span>
+                            <span className="text-xs text-gray-400 tabular-nums">{used.toLocaleString()} / {max.toLocaleString()} used</span>
+                          </div>
+                          {/* Progress bar */}
+                          <div className="h-2 bg-gray-200 rounded-full overflow-hidden mb-3">
+                            <div
+                              className={`h-full rounded-full transition-all ${barColor(p)}`}
+                              style={{ width: `${p}%` }}
+                            />
+                          </div>
+                          {/* Editable max input */}
+                          <div className="flex items-center gap-2">
+                            <label className="text-xs text-gray-500 shrink-0">Max:</label>
+                            <input
+                              type="number" min="0"
+                              value={drafts[key] ?? ''}
+                              onChange={(e) => setDrafts((d) => ({ ...d, [key]: e.target.value }))}
+                              className="flex-1 h-8 px-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 outline-none focus:border-[#001F3F]/40 focus:ring-2 focus:ring-[#001F3F]/5 transition-all"
+                            />
+                            <span className={`text-xs font-bold tabular-nums ${
+                              p >= 90 ? 'text-red-500' : p >= 70 ? 'text-amber-500' : 'text-gray-400'
+                            }`}>{p}%</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        {!loading && (
+          <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 rounded-b-2xl bg-gray-50">
+            <button onClick={onClose}
+              className="px-5 h-10 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-100 border border-gray-200 transition-all">
+              Cancel
+            </button>
+            <button onClick={handleSave} disabled={saving}
+              className="px-6 h-10 bg-gradient-to-r from-[#001F3F] to-[#002d5c] hover:from-[#002d5c] hover:to-[#003d7a] disabled:from-gray-300 disabled:to-gray-300 text-white rounded-xl text-sm font-bold shadow-md shadow-[#001F3F]/15 transition-all flex items-center gap-2">
+              {saving ? <Loader2 className="animate-spin" size={15} /> : <><SlidersHorizontal size={15} /> Save Limits</>}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Monitor Accounts tab ───────────────────────────────────────────────────────
 function MonitorAccountsTab() {
   const fetchCustomers = useCallback(() => customersApi.list(), []);
   const { data: users = [], loading, reload } = useApi(fetchCustomers, CACHE_KEYS.CUSTOMERS);
   const [actionLoading, setActionLoading] = useState(null);
+  const [limitsCustomer, setLimitsCustomer] = useState(null);
   const { toast, showToast } = useToast();
 
   const doAction = async (userId, action) => {
@@ -239,6 +408,13 @@ function MonitorAccountsTab() {
 
   return (
     <div>
+      {limitsCustomer && (
+        <CustomerLimitsModal
+          customer={limitsCustomer}
+          onClose={() => setLimitsCustomer(null)}
+        />
+      )}
+
       <Toast toast={toast} />
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -306,6 +482,12 @@ function MonitorAccountsTab() {
                     <td className="px-5 py-4">{statusBadge(u.status)}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-0.5">
+                        <button
+                          onClick={() => setLimitsCustomer(u)}
+                          title="View / edit limits"
+                          className="p-2 text-[#001F3F] hover:bg-blue-50 rounded-lg transition-all">
+                          <SlidersHorizontal size={15} />
+                        </button>
                         {u.status === 'Active' && (
                           <button onClick={() => doAction(u.id, 'pause')}
                             disabled={actionLoading === u.id + 'pause'}

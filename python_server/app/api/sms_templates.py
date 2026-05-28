@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
+from app.utils.limits import check_limit
 
 router = APIRouter()
 
@@ -39,6 +40,14 @@ def create_sms_template(
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
+        cid = current_user.customer_id
+        if cid is not None:
+            current_count = db.execute(
+                text("SELECT COUNT(*) AS c FROM sms_templates WHERE customer_id=:cid"),
+                {"cid": cid},
+            ).fetchone().c
+            check_limit(db, cid, "max_sms_templates", current_count, "SMS Template")
+
         result = db.execute(
             text("INSERT INTO sms_templates (code, name, body, status, customer_id) VALUES (:code, :name, :body, :status, :customer_id)"),
             {"code": req.get('code'), "name": req.get('name'), "body": req.get('body'),
@@ -46,7 +55,9 @@ def create_sms_template(
         )
         db.commit()
         return {"id": result.lastrowid, **req}
-    except Exception as e:
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: E722
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 

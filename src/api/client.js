@@ -5,6 +5,7 @@ const request = async (url, { headers: callerHeaders = {}, ...rest } = {}) => {
   });
   if (res.status === 204) return null;
   const body = await res.json().catch(() => ({}));
+  // 429 toast is handled globally in main.jsx interceptor — no duplicate needed here
   if (!res.ok) throw new Error(body.detail || body.message || `HTTP ${res.status}`);
   return body;
 };

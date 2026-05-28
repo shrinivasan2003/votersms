@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.dependencies.security import get_current_user
 from app.models import User as UserModel
+from app.utils.limits import check_limit
 
 router = APIRouter()
 
@@ -71,6 +72,14 @@ def create_sms_job(
     current_user = Depends(get_current_user),
 ):
     try:
+        cid = getattr(current_user, 'customer_id', None)
+        if cid is not None:
+            current_count = db.execute(
+                text("SELECT COUNT(*) AS c FROM sms_jobs WHERE customer_id=:cid"),
+                {"cid": cid},
+            ).fetchone().c
+            check_limit(db, cid, "max_sms_jobs", current_count, "SMS Job")
+
         result = db.execute(
             text("""
                 INSERT INTO sms_jobs
@@ -91,6 +100,8 @@ def create_sms_job(
         )
         db.commit()
         return {"id": result.lastrowid, **req}
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
