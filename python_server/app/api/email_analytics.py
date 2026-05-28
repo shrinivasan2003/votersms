@@ -41,6 +41,8 @@ def list_email_analytics(
                 ej.id                                                       AS job_id,
                 et.name                                                     AS template_name,
                 ep.name                                                     AS provider_name,
+                p.name                                                      AS precinct_name,
+                cl.name                                                     AS list_name,
                 ej.status,
                 ej.created_at,
                 COUNT(DISTINCT ejm.id)                                      AS total_sent,
@@ -51,14 +53,17 @@ def list_email_analytics(
                                                                             AS unique_clicks,
                 SUM(CASE WHEN ee.event_type='click'   THEN 1 ELSE 0 END)   AS total_clicks,
                 SUM(CASE WHEN ee.event_type='bounce'  THEN 1 ELSE 0 END)   AS bounces,
-                SUM(CASE WHEN ee.event_type='spam'    THEN 1 ELSE 0 END)   AS spam_complaints
+                SUM(CASE WHEN ee.event_type='spam'    THEN 1 ELSE 0 END)   AS spam_complaints,
+                SUM(CASE WHEN ee.event_type='delivery' THEN 1 ELSE 0 END)  AS deliveries
             FROM email_jobs ej
             LEFT JOIN email_templates et  ON ej.template_id  = et.id
             LEFT JOIN email_providers ep  ON ej.provider_id  = ep.id
+            LEFT JOIN precincts       p   ON ej.precinct_id  = p.id
+            LEFT JOIN contact_lists   cl  ON ej.list_id      = cl.id
             LEFT JOIN email_job_messages ejm ON ej.id        = ejm.job_id
             LEFT JOIN email_events    ee  ON ejm.postmark_message_id = ee.postmark_message_id
             {cid_filter}
-            GROUP BY ej.id, et.name, ep.name, ej.status, ej.created_at
+            GROUP BY ej.id, et.name, ep.name, p.name, cl.name, ej.status, ej.created_at
             ORDER BY ej.id DESC
         """), params)
         return [_calc_rates(dict(r._mapping)) for r in result]
@@ -69,12 +74,16 @@ def list_email_analytics(
                 fallback = db.execute(text(f"""
                     SELECT ej.id AS job_id,
                            et.name AS template_name, ep.name AS provider_name,
+                           p.name AS precinct_name, cl.name AS list_name,
                            ej.status, ej.created_at,
                            0 AS total_sent, 0 AS unique_opens, 0 AS total_opens,
-                           0 AS unique_clicks, 0 AS total_clicks, 0 AS bounces, 0 AS spam_complaints
+                           0 AS unique_clicks, 0 AS total_clicks,
+                           0 AS bounces, 0 AS spam_complaints, 0 AS deliveries
                     FROM email_jobs ej
-                    LEFT JOIN email_templates et ON ej.template_id = et.id
-                    LEFT JOIN email_providers ep ON ej.provider_id = ep.id
+                    LEFT JOIN email_templates et  ON ej.template_id = et.id
+                    LEFT JOIN email_providers ep  ON ej.provider_id = ep.id
+                    LEFT JOIN precincts       p   ON ej.precinct_id = p.id
+                    LEFT JOIN contact_lists   cl  ON ej.list_id     = cl.id
                     {cid_filter}
                     ORDER BY ej.id DESC
                 """), params)
