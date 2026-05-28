@@ -111,20 +111,20 @@ const EmailTemplates = () => {
   if (view === 'add') {
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-brand-navy">{editingRow ? 'Edit Email Template' : 'Add Email Template'}</h1>
-            <p className="text-brand-textMuted mt-1">{editingRow ? 'Update existing email template' : 'Create a new email template'}</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">{editingRow ? 'Edit Email Template' : 'Add Email Template'}</h1>
+            <p className="text-sm text-brand-textMuted mt-1">{editingRow ? 'Update existing email template' : 'Create a new email template'}</p>
           </div>
-          <button 
-            onClick={handleBack} 
+          <button
+            onClick={handleBack}
             className="px-6 py-2 border border-gray-300 rounded-lg text-sm font-medium text-brand-textPrimary hover:bg-gray-50 transition-colors"
           >
             Back to List
           </button>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-brand-border p-8 max-w-7xl mx-auto">
+        <div className="bg-white rounded-xl shadow-sm border border-brand-border p-4 sm:p-8 max-w-full">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <label className="block text-sm font-bold text-brand-textPrimary">Code *</label>
@@ -249,12 +249,14 @@ const EmailTemplates = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-brand-navy">Email Templates</h1>
-          <p className="text-brand-textMuted mt-1">Manage email message templates</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">Email Templates</h1>
+          <p className="text-sm text-brand-textMuted mt-1">Manage email message templates</p>
         </div>
-        <Button onClick={handleAdd} className="rounded-lg px-6 py-2.5 font-semibold">+ Add Template</Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={handleAdd} className="rounded-lg px-6 py-2.5 font-semibold">+ Add Template</Button>
+        </div>
       </div>
 
       <DataTable 

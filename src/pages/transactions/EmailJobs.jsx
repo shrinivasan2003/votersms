@@ -121,10 +121,10 @@ const EmailJobs = () => {
   if (view === 'add') {
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-brand-navy">Create Email Job</h1>
-            <p className="text-brand-textMuted mt-1">Create a new email messaging job</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">Create Email Job</h1>
+            <p className="text-sm text-brand-textMuted mt-1">Create a new email messaging job</p>
           </div>
           <button onClick={handleBack}
             className="px-6 py-2 border border-gray-300 rounded-lg text-sm font-medium text-brand-textPrimary hover:bg-gray-50 transition-colors">
@@ -132,7 +132,7 @@ const EmailJobs = () => {
           </button>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-brand-border p-8 max-w-7xl mx-auto">
+        <div className="bg-white rounded-xl shadow-sm border border-brand-border p-4 sm:p-8 max-w-full">
           <form onSubmit={handleSubmit} className="space-y-6">
 
             {/* Recipient source — defaults to List tab for email */}
@@ -189,15 +189,17 @@ const EmailJobs = () => {
   /* ── List view ── */
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-brand-navy">Email Jobs</h1>
-          <p className="text-brand-textMuted mt-1">Manage email messaging jobs</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">Email Jobs</h1>
+          <p className="text-sm text-brand-textMuted mt-1">Manage email messaging jobs</p>
         </div>
-        <Button onClick={() => { setRecipient({ type: 'list', precinct_id: null, list_id: null, voter_id: null }); setView('add'); }}
-          className="rounded-lg px-6 py-2.5 font-semibold">
-          + Create Job
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={() => { setRecipient({ type: 'list', precinct_id: null, list_id: null, voter_id: null }); setView('add'); }}
+            className="rounded-lg px-6 py-2.5 font-semibold">
+            + Create Job
+          </Button>
+        </div>
       </div>
       <DataTable
         columns={columns}

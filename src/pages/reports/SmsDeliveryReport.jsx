@@ -152,12 +152,12 @@ const SmsDeliveryReport = () => {
         <h1 className="text-xl font-bold text-brand-navy">BallotDA - Civic Engagement Portal</h1>
       </div>
 
-      <div className="flex justify-between items-start no-print">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 no-print">
         <div>
-          <h1 className="text-3xl font-bold text-brand-navy">SMS Delivery Report</h1>
-          <p className="text-brand-textMuted mt-1">View SMS job delivery statistics and recipient details</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">SMS Delivery Report</h1>
+          <p className="text-sm text-brand-textMuted mt-1">View SMS job delivery statistics and recipient details</p>
         </div>
-        <button 
+        <button
           onClick={handlePrint}
           className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-brand-textPrimary hover:bg-gray-50 transition-colors shadow-sm"
         >
@@ -188,7 +188,7 @@ const SmsDeliveryReport = () => {
           <Search size={20} className="text-white" />
           <h3 className="font-bold text-white">Filters</h3>
         </div>
-        <div className="p-8 space-y-6">
+        <div className="p-4 sm:p-8 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <label className="block text-sm font-bold text-brand-textPrimary">Job ID</label>

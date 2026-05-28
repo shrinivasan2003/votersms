@@ -249,12 +249,12 @@ const Lists = () => {
   if (view === 'create') {
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-brand-navy">
+            <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">
               {editingList ? 'Edit List' : 'Create New List'}
             </h1>
-            <p className="text-brand-textMuted mt-1">
+            <p className="text-sm text-brand-textMuted mt-1">
               {editingList ? 'Update list name and settings' : 'Define a named group of recipients'}
             </p>
           </div>
@@ -266,7 +266,7 @@ const Lists = () => {
           </button>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-brand-border p-8 max-w-2xl">
+        <div className="bg-white rounded-xl shadow-sm border border-brand-border p-4 sm:p-8 max-w-full sm:max-w-2xl">
           <form onSubmit={handleSaveList} className="space-y-6">
             <div className="space-y-2">
               <label className="block text-sm font-bold text-brand-textPrimary">List Name *</label>
@@ -344,25 +344,25 @@ const Lists = () => {
     return (
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
           <div className="flex items-center gap-4">
             <button
               onClick={() => { setView('list'); setSelectedList(null); }}
-              className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+              className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors shrink-0"
             >
               <ArrowLeft size={18} className="text-brand-textSecondary" />
             </button>
             <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-bold text-brand-navy">{selectedList.name}</h1>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">{selectedList.name}</h1>
                 <StatusBadge status={selectedList.status} />
               </div>
               {selectedList.description && (
-                <p className="text-brand-textMuted mt-1">{selectedList.description}</p>
+                <p className="text-sm text-brand-textMuted mt-1">{selectedList.description}</p>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => openCreate(selectedList)}
               className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-brand-textPrimary hover:bg-gray-50 transition-colors"
@@ -617,12 +617,12 @@ const Lists = () => {
   return (
     <div className="space-y-6">
       {/* Page header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-brand-navy">Contact Lists</h1>
-          <p className="text-brand-textMuted mt-1">Organise recipients into targeted groups for your campaigns</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">Contact Lists</h1>
+          <p className="text-sm text-brand-textMuted mt-1">Organise recipients into targeted groups for your campaigns</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={fetchLists}
             className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-brand-textPrimary hover:bg-gray-50 transition-colors shadow-sm"

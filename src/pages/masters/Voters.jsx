@@ -201,17 +201,17 @@ const Voters = () => {
   if (view === 'add') {
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-brand-navy">{editingRow ? 'Edit Recipient' : 'Add Recipient'}</h1>
-            <p className="text-brand-textMuted mt-1">{editingRow ? 'Update recipient details' : 'Create a new recipient'}</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">{editingRow ? 'Edit Recipient' : 'Add Recipient'}</h1>
+            <p className="text-sm text-brand-textMuted mt-1">{editingRow ? 'Update recipient details' : 'Create a new recipient'}</p>
           </div>
           <Button variant="outlined" onClick={handleBack} className="rounded-lg px-6">
             Back to List
           </Button>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-brand-border p-8 max-w-6xl">
+        <div className="bg-white rounded-xl shadow-sm border border-brand-border p-4 sm:p-8 max-w-full">
           <form onSubmit={handleSubmit} className="space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <FormInput
@@ -275,12 +275,12 @@ const Voters = () => {
     <div className="space-y-4">
       <TabBar tab={tab} setTab={setTab} onSwitchToRecipients={() => setView('list')} />
 
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-brand-navy">Recipients</h1>
-          <p className="text-brand-textMuted">All recipients — manage contact information</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">Recipients</h1>
+          <p className="text-sm text-brand-textMuted">All recipients — manage contact information</p>
         </div>
-        <div className="space-x-3">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outlined" onClick={() => setIsUploadModalOpen(true)} className="inline-flex items-center">
             <Upload size={16} className="mr-2" /> Upload CSV
           </Button>

@@ -61,12 +61,12 @@ const ProcessJobs = () => {
   };
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div className="flex items-center space-x-3">
-          <Play size={28} className="text-brand-navy" strokeWidth={1.5} />
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+        <div className="flex items-center gap-3">
+          <Play size={24} className="text-brand-navy shrink-0" strokeWidth={1.5} />
           <div>
-            <h1 className="text-3xl font-bold text-brand-navy">Process SMS Jobs</h1>
-            <p className="text-brand-textMuted mt-0.5">Manually trigger SMS job processing</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">Process SMS Jobs</h1>
+            <p className="text-sm text-brand-textMuted mt-0.5">Manually trigger SMS job processing</p>
           </div>
         </div>
         <button
@@ -84,7 +84,7 @@ const ProcessJobs = () => {
             <Play size={20} className="text-white" fill="white" />
             <h3 className="font-bold text-white">Process Jobs</h3>
           </div>
-          <div className="p-8">
+          <div className="p-4 sm:p-8">
             {message && (
               <div className="mb-6 p-4 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">
                 {message}
@@ -222,7 +222,7 @@ const ProcessJobs = () => {
           <Info size={20} className="text-brand-blue" />
           <h3 className="font-bold text-brand-blue text-lg">Automatic Processing Setup</h3>
         </div>
-        <div className="p-8 space-y-8">
+        <div className="p-4 sm:p-8 space-y-8">
           <div className="space-y-4">
             <h4 className="font-bold text-brand-textPrimary text-lg">Python Background Processor (FastAPI)</h4>
             <p className="text-sm text-brand-textSecondary">The jobs are now processed natively by our FastAPI backend using `BackgroundTasks`.</p>

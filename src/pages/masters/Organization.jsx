@@ -60,16 +60,16 @@ const CountiesSection = () => {
   if (view === 'add') {
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
           <div>
-            <h2 className="text-2xl font-bold text-brand-navy">{editingRow ? 'Edit County' : 'Add County'}</h2>
-            <p className="text-brand-textMuted mt-1">{editingRow ? 'Update county details' : 'Create a new county'}</p>
+            <h2 className="text-xl sm:text-2xl font-bold text-brand-navy">{editingRow ? 'Edit County' : 'Add County'}</h2>
+            <p className="text-sm text-brand-textMuted mt-1">{editingRow ? 'Update county details' : 'Create a new county'}</p>
           </div>
           <Button variant="outlined" onClick={() => { setView('list'); setEditingRow(null); }} className="rounded-lg px-6">
             Back to List
           </Button>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-brand-border p-8 max-w-2xl">
+        <div className="bg-white rounded-xl shadow-sm border border-brand-border p-4 sm:p-8 max-w-full sm:max-w-2xl">
           <form onSubmit={handleSubmit} className="space-y-6">
             <FormInput label="Code *"  name="code"  defaultValue={editingRow?.code  || ''} placeholder="Enter county code"  required />
             <FormInput label="Name *"  name="name"  defaultValue={editingRow?.name  || ''} placeholder="Enter county name"  required />
@@ -163,16 +163,16 @@ const PrecinctsSection = () => {
   if (view === 'add') {
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-start">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
           <div>
-            <h2 className="text-2xl font-bold text-brand-navy">{editingRow ? 'Edit Precinct' : 'Add Precinct'}</h2>
-            <p className="text-brand-textMuted mt-1">{editingRow ? 'Update precinct details' : 'Create a new precinct'}</p>
+            <h2 className="text-xl sm:text-2xl font-bold text-brand-navy">{editingRow ? 'Edit Precinct' : 'Add Precinct'}</h2>
+            <p className="text-sm text-brand-textMuted mt-1">{editingRow ? 'Update precinct details' : 'Create a new precinct'}</p>
           </div>
           <Button variant="outlined" onClick={() => { setView('list'); setEditingRow(null); }} className="rounded-lg px-6">
             Back to List
           </Button>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-brand-border p-8 max-w-2xl">
+        <div className="bg-white rounded-xl shadow-sm border border-brand-border p-4 sm:p-8 max-w-full sm:max-w-2xl">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-2">
               <label className="block text-sm font-medium text-brand-textPrimary">County *</label>

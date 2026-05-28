@@ -64,10 +64,10 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-brand-navy">Dashboard</h1>
-          <p className="text-brand-textMuted">
+          <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">Dashboard</h1>
+          <p className="text-sm text-brand-textMuted">
             Welcome, <span className="font-semibold text-brand-textPrimary">
               {user?.first_name || user?.name?.split(' ')[0] || user?.username || 'User'}
             </span>
@@ -76,14 +76,14 @@ const Dashboard = () => {
             )}
           </p>
         </div>
-        <div className="space-x-3">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outlined" onClick={() => navigate('/sms-delivery-report')}>View Reports</Button>
           <Button onClick={() => navigate('/sms-jobs')}>New Campaign</Button>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
         <StatCard title="Recipients" value={stats.voters?.toString() || '0'} icon={Users} colorClass="#8B5CF6" />
         <StatCard title="SMS Templates" value={stats.smsTemplates?.toString() || '0'} icon={FileText} colorClass="#F59E0B" />
         <StatCard title="SMS Jobs" value={stats.smsJobs?.toString() || '0'} icon={BarChart2} colorClass="#6366F1" />
@@ -173,7 +173,7 @@ const Dashboard = () => {
 
       {/* Job Statistics table */}
       <div className="bg-white rounded-xl shadow-sm border border-brand-border p-6">
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
           <h3 className="text-lg font-semibold text-brand-textPrimary">Job Statistics</h3>
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -185,7 +185,7 @@ const Dashboard = () => {
         </div>
 
         {showFilters && (
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6 p-4 bg-gray-50/50 rounded-lg border border-brand-border">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 mb-6 p-4 bg-gray-50/50 rounded-lg border border-brand-border">
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-brand-textSecondary uppercase">Job Type</label>
               <select value={filters.jobType} onChange={(e) => setFilters({ ...filters, jobType: e.target.value })}
@@ -223,7 +223,7 @@ const Dashboard = () => {
                 onChange={(e) => setFilters({ ...filters, search: e.target.value })}
                 className="w-full bg-white border border-brand-border rounded-lg px-3 py-2 text-sm outline-none focus:border-brand-blue" />
             </div>
-            <div className="md:col-span-5 flex justify-end">
+            <div className="sm:col-span-2 md:col-span-5 flex justify-end">
               <button onClick={() => setFilters({ jobType: 'All Jobs', status: 'All Status', startDate: '', endDate: '', search: '' })}
                 className="text-xs font-bold text-brand-blue hover:underline">
                 Clear Filters
@@ -233,7 +233,7 @@ const Dashboard = () => {
         )}
 
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-brand-border">
+          <table className="min-w-full min-w-[600px] divide-y divide-brand-border">
             <thead className="bg-gray-50">
               <tr>
                 {['JOB ID', 'TYPE', 'STATUS', 'TEMPLATE', 'RECIPIENTS', 'SUCCESS/FAILED', 'CREATED AT'].map((head) => (

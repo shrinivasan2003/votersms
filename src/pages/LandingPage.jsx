@@ -121,6 +121,23 @@ const LandingPage = () => (
 
     {/* ── Navbar ───────────────────────────────────────────────────────────── */}
     <PublicNavbar
+      navLinks={
+        <>
+          {[
+            { label: 'How It Works', id: 'how-it-works' },
+            { label: 'Features',     id: 'features'     },
+            { label: 'Why BallotDA', id: 'why-ballotda' },
+          ].map(({ label, id }) => (
+            <button
+              key={id}
+              onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })}
+              className="px-3 py-2 text-sm font-semibold text-gray-600 hover:text-[#001F3F] hover:bg-gray-50 rounded-lg transition-all"
+            >
+              {label}
+            </button>
+          ))}
+        </>
+      }
       rightContent={
         <Link
           to="/login"
@@ -227,7 +244,7 @@ const LandingPage = () => (
     </section>
 
     {/* ── How It Works ─────────────────────────────────────────────────────── */}
-    <section id="how-it-works" className="py-12 sm:py-16 px-4 sm:px-6 bg-gray-50">
+    <section id="how-it-works" className="scroll-mt-16 py-12 sm:py-16 px-4 sm:px-6 bg-gray-50">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-8 sm:mb-10">
           <span className="inline-block text-xs font-bold uppercase tracking-widest text-blue-600 bg-blue-50 border border-blue-100 px-3 py-1 rounded-full mb-3">
@@ -257,7 +274,7 @@ const LandingPage = () => (
     </section>
 
     {/* ── Features ─────────────────────────────────────────────────────────── */}
-    <section id="features" className="py-12 sm:py-16 px-4 sm:px-6 bg-white">
+    <section id="features" className="scroll-mt-16 py-12 sm:py-16 px-4 sm:px-6 bg-white">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-8 sm:mb-10">
           <span className="inline-block text-xs font-bold uppercase tracking-widest text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-full mb-3">
@@ -293,7 +310,7 @@ const LandingPage = () => (
     </section>
 
     {/* ── Why BallotDA ─────────────────────────────────────────────────────── */}
-    <section className="py-12 sm:py-16 px-4 sm:px-6 bg-gray-50 border-y border-gray-100">
+    <section id="why-ballotda" className="scroll-mt-16 py-12 sm:py-16 px-4 sm:px-6 bg-gray-50 border-y border-gray-100">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-8 sm:mb-10">
           <span className="inline-block text-xs font-bold uppercase tracking-widest text-[#001F3F] bg-[#001F3F]/8 border border-[#001F3F]/15 px-3 py-1 rounded-full mb-3">

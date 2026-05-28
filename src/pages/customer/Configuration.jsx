@@ -17,8 +17,8 @@ const Configuration = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-brand-navy flex items-center gap-2">
-          <Settings2 size={28} /> Configuration
+        <h1 className="text-xl sm:text-2xl font-bold text-brand-navy flex items-center gap-2">
+          <Settings2 size={24} className="shrink-0" /> Configuration
         </h1>
         <p className="text-brand-textMuted mt-1">
           Manage your organization's communication provider settings
@@ -27,7 +27,7 @@ const Configuration = () => {
 
       {/* Tab bar */}
       <div className="bg-white rounded-xl border border-brand-border shadow-sm overflow-hidden">
-        <div className="flex border-b border-brand-border">
+        <div className="flex border-b border-brand-border overflow-x-auto">
           {tabs.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
