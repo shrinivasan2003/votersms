@@ -45,25 +45,64 @@ def _resolve_job_id(db: Session, message_id: str):
     return row[0] if row else None
 
 
+_V2_COLS_AVAILABLE: bool | None = None   # None = unknown; True/False after first check
+
+
 def _insert_event(db: Session, params: dict):
     """
     Insert a row into email_events.
-    Columns introduced in v2 migration (raw_payload, bounce_type,
-    bounce_description) are included; older installs without the migration
-    will fail gracefully — the exception is caught by the caller.
+
+    Tries the full v2 INSERT (with raw_payload / bounce_type / bounce_description)
+    first.  If those columns don't exist yet (migration not run), falls back to
+    the original v1 column set so events are never lost.
     """
+    global _V2_COLS_AVAILABLE
+
+    # ── Try v2 INSERT ─────────────────────────────────────────────────────────
+    if _V2_COLS_AVAILABLE is not False:
+        try:
+            db.execute(
+                text("""
+                    INSERT INTO email_events
+                        (postmark_message_id, job_id, recipient_email, event_type,
+                         is_first_event, click_url, platform, client_name, os_name,
+                         read_seconds, occurred_at,
+                         raw_payload, bounce_type, bounce_description)
+                    VALUES
+                        (:mid, :job_id, :recipient, :event_type,
+                         :is_first, :click_url, :platform, :client_name, :os_name,
+                         :read_seconds, :occurred_at,
+                         :raw_payload, :bounce_type, :bounce_description)
+                """),
+                params,
+            )
+            db.commit()
+            _V2_COLS_AVAILABLE = True
+            return
+        except Exception as exc:
+            db.rollback()
+            err = str(exc).lower()
+            # Column missing → fall through to v1 INSERT
+            if "unknown column" in err or "1054" in err or "doesn't exist" in err:
+                logger.warning(
+                    "email_events v2 columns missing — falling back to v1 INSERT. "
+                    "Run migrate_email_events_v2.py to enable full analytics."
+                )
+                _V2_COLS_AVAILABLE = False
+            else:
+                raise  # real DB error — let the caller handle it
+
+    # ── Fallback v1 INSERT (no raw_payload / bounce_type / bounce_description) ─
     db.execute(
         text("""
             INSERT INTO email_events
                 (postmark_message_id, job_id, recipient_email, event_type,
                  is_first_event, click_url, platform, client_name, os_name,
-                 read_seconds, occurred_at,
-                 raw_payload, bounce_type, bounce_description)
+                 read_seconds, occurred_at)
             VALUES
                 (:mid, :job_id, :recipient, :event_type,
                  :is_first, :click_url, :platform, :client_name, :os_name,
-                 :read_seconds, :occurred_at,
-                 :raw_payload, :bounce_type, :bounce_description)
+                 :read_seconds, :occurred_at)
         """),
         params,
     )
