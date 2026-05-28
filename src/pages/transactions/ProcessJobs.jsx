@@ -65,8 +65,8 @@ const ProcessJobs = () => {
         <div className="flex items-center gap-3">
           <Play size={24} className="text-brand-navy shrink-0" strokeWidth={1.5} />
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">Process SMS Jobs</h1>
-            <p className="text-sm text-brand-textMuted mt-0.5">Manually trigger SMS job processing</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">Process Jobs</h1>
+            <p className="text-sm text-brand-textMuted mt-0.5">Scheduled jobs run automatically · Use this to manually trigger a job</p>
           </div>
         </div>
         <button
@@ -181,7 +181,7 @@ const ProcessJobs = () => {
                       <th className="px-6 py-4 text-left text-xs font-bold text-brand-textSecondary uppercase tracking-wider">ID</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-brand-textSecondary uppercase tracking-wider">PRECINCT</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-brand-textSecondary uppercase tracking-wider">TEMPLATE</th>
-                      <th className="px-6 py-4 text-left text-xs font-bold text-brand-textSecondary uppercase tracking-wider">RECIPIENTS</th>
+                      <th className="px-6 py-4 text-left text-xs font-bold text-brand-textSecondary uppercase tracking-wider">SCHEDULED AT</th>
                       <th className="px-6 py-4 text-left text-xs font-bold text-brand-textSecondary uppercase tracking-wider">STATUS</th>
                     </tr>
                   </thead>
@@ -199,8 +199,13 @@ const ProcessJobs = () => {
                         <td className="px-6 py-4 text-sm text-brand-textSecondary">
                           {job.template_name || '—'}
                         </td>
-                        <td className="px-6 py-4 text-sm text-brand-textPrimary font-bold text-center">
-                          {job.recipients || 0}
+                        <td className="px-6 py-4 text-sm whitespace-nowrap">
+                          {job.scheduled_at
+                            ? <span className="text-amber-600 font-medium">
+                                {new Date(job.scheduled_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            : <span className="text-gray-400 italic text-xs">Immediate</span>
+                          }
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="px-3 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-700">
@@ -224,11 +229,15 @@ const ProcessJobs = () => {
         </div>
         <div className="p-4 sm:p-8 space-y-8">
           <div className="space-y-4">
-            <h4 className="font-bold text-brand-textPrimary text-lg">Python Background Processor (FastAPI)</h4>
-            <p className="text-sm text-brand-textSecondary">The jobs are now processed natively by our FastAPI backend using `BackgroundTasks`.</p>
-            <div className="bg-[#f8f9fa] border border-gray-200 rounded-lg p-5 font-mono text-sm text-brand-textPrimary">
-              <p className="text-gray-500 mb-2"># Processing uses Twilio (SMS) and Postmark (Email) APIs.</p>
-              <p>When you trigger a job via the UI, the backend runs it asynchronously without blocking.</p>
+            <h4 className="font-bold text-brand-textPrimary text-lg">Automatic Scheduling</h4>
+            <p className="text-sm text-brand-textSecondary">
+              The backend runs a scheduler loop every <strong>60 seconds</strong>. It automatically detects
+              any Pending job whose scheduled time has arrived and processes it — no manual action needed.
+            </p>
+            <div className="bg-[#f8f9fa] border border-gray-200 rounded-lg p-5 text-sm text-brand-textPrimary space-y-1">
+              <p>• <strong>No scheduled time set</strong> → job starts processing immediately when created.</p>
+              <p>• <strong>Future scheduled time</strong> → job waits; scheduler picks it up when the time arrives.</p>
+              <p>• <strong>This page</strong> → use only to manually force-trigger a specific job ID.</p>
             </div>
           </div>
 

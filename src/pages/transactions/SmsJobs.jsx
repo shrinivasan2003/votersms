@@ -64,6 +64,9 @@ const SmsJobs = () => {
 
   useEffect(() => { fetchData(); }, []);
 
+  const fmtDt = (d) =>
+    d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
+
   const columns = [
     { header: 'ID',         render: (row) => `#${row.id}` },
     { header: 'RECIPIENTS', render: (row) => <RecipientCell row={row} /> },
@@ -73,6 +76,16 @@ const SmsJobs = () => {
     { header: 'STATUS',     render: (row) => {
         const v = row.status === 'Completed' ? 'success' : row.status === 'Failed' ? 'danger' : 'warning';
         return <Badge variant={v}>{row.status}</Badge>;
+    }},
+    { header: 'SCHEDULED', render: (row) => {
+        const dt = fmtDt(row.scheduled_at);
+        if (!dt) return <span className="text-xs text-gray-400 italic">Immediate</span>;
+        const isPast = new Date(row.scheduled_at) <= new Date();
+        return (
+          <span className={`text-xs font-medium ${isPast ? 'text-brand-textSecondary' : 'text-amber-600'}`}>
+            {dt}
+          </span>
+        );
     }},
     { header: 'CREATED', accessor: 'created_at' },
   ];
@@ -176,8 +189,13 @@ const SmsJobs = () => {
             {/* Schedule */}
             <div className="space-y-2">
               <label className="block text-sm font-bold text-brand-textPrimary">Scheduled At (Optional)</label>
-              <input type="datetime-local" name="scheduled_at"
-                className="block w-full rounded-lg border border-brand-border px-4 py-3 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue transition-all" />
+              <input
+                type="datetime-local"
+                name="scheduled_at"
+                min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                className="block w-full rounded-lg border border-brand-border px-4 py-3 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue transition-all"
+              />
+              <p className="text-xs text-brand-textMuted">Leave empty to send immediately. Must be a future time if set.</p>
             </div>
 
             <div className="flex gap-4 pt-4">

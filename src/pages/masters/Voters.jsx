@@ -1,11 +1,80 @@
 import { useState, useEffect, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import FormInput from '../../components/shared/FormInput';
 import Badge from '../../components/shared/Badge';
 import Modal from '../../components/shared/Modal';
 import Lists from './Lists';
-import { Download, Upload, Users, ListChecks } from 'lucide-react';
+import { Download, Upload, Users, ListChecks, FileSpreadsheet } from 'lucide-react';
+
+// ── Proper CSV parser (handles quoted fields with commas) ─────────────────────
+function parseCSV(text) {
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const parse = (line) => {
+    const result = [];
+    let cur = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+        else { inQuotes = !inQuotes; }
+      } else if (ch === ',' && !inQuotes) {
+        result.push(cur.trim()); cur = '';
+      } else {
+        cur += ch;
+      }
+    }
+    result.push(cur.trim());
+    return result;
+  };
+
+  const headers = parse(lines[0]).map(h => h.toLowerCase());
+  return lines
+    .slice(1)
+    .filter(l => l.trim())
+    .map(line => {
+      const vals = parse(line);
+      const row = {};
+      headers.forEach((h, i) => { row[h] = vals[i] ?? ''; });
+      return row;
+    });
+}
+
+// ── Excel / CSV → JSON ────────────────────────────────────────────────────────
+function parseSpreadsheet(file) {
+  return new Promise((resolve, reject) => {
+    const isCSV = /\.csv$/i.test(file.name);
+    if (isCSV) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try { resolve(parseCSV(e.target.result)); }
+        catch (err) { reject(err); }
+      };
+      reader.onerror = reject;
+      reader.readAsText(file);
+    } else {
+      // Excel
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const wb   = XLSX.read(e.target.result, { type: 'array' });
+          const ws   = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+          const normalized = rows.map(row => {
+            const n = {};
+            Object.keys(row).forEach(k => { n[k.toLowerCase().trim()] = String(row[k] ?? '').trim(); });
+            return n;
+          });
+          resolve(normalized);
+        } catch (err) { reject(err); }
+      };
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    }
+  });
+}
 
 // ── Tab bar shared between both sections ──────────────────────────────────────
 const TabBar = ({ tab, setTab, onSwitchToRecipients }) => (
@@ -42,6 +111,7 @@ const Voters = () => {
   const [editingRow, setEditingRow] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [precincts, setPrecincts] = useState([]);
   const fileInputRef = useRef(null);
 
   const API_URL = '/api/voters';
@@ -57,6 +127,14 @@ const Voters = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchPrecincts = async () => {
+    try {
+      const res = await fetch('/api/precincts');
+      const data = await res.json();
+      setPrecincts(Array.isArray(data) ? data : []);
+    } catch { /* ignore */ }
   };
 
   useEffect(() => {
@@ -122,69 +200,68 @@ const Voters = () => {
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    if (file && file.type === 'text/csv') {
-      setSelectedFile(file);
-    } else {
-      alert('Please select a valid CSV file');
+    if (!file) return;
+    const validExt = /\.(csv|xlsx|xls)$/i.test(file.name);
+    if (!validExt) {
+      alert('Please select a CSV or Excel file (.csv, .xlsx, .xls)');
+      e.target.value = '';
       setSelectedFile(null);
+      return;
     }
+    setSelectedFile(file);
   };
 
   const handleUpload = async () => {
     if (!selectedFile) return;
     setIsUploading(true);
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const text    = e.target.result;
-      const lines   = text.split('\n');
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-      const voters  = lines.slice(1).filter(line => line.trim()).map(line => {
-        const values = line.split(',').map(v => v.trim());
-        const voter  = {};
-        headers.forEach((header, index) => { voter[header] = values[index]; });
-        return voter;
-      });
-
-      try {
-        const res    = await fetch(`${API_URL}/bulk`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify(voters)
-        });
-        const result = await res.json();
-        if (res.ok) {
-          alert(`Successfully uploaded ${result.inserted} recipients.`);
-          setIsUploadModalOpen(false);
-          setSelectedFile(null);
-          fetchData();
-        } else {
-          alert(result.message || 'Upload failed');
-        }
-      } catch (err) {
-        alert(`Upload Error: ${err.message}. Please check if the backend server is running.`);
-      } finally {
+    try {
+      const rows = await parseSpreadsheet(selectedFile);
+      if (!rows.length) {
+        alert('The file appears to be empty.');
         setIsUploading(false);
+        return;
       }
-    };
-    reader.readAsText(selectedFile);
+      const res    = await fetch(`${API_URL}/bulk`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(rows),
+      });
+      const result = await res.json();
+      if (res.ok) {
+        const msg = [
+          `✅ Successfully uploaded ${result.inserted} recipient(s).`,
+          result.skipped  > 0 ? `⚠️ ${result.skipped} empty row(s) skipped.`  : '',
+          result.failed   > 0 ? `❌ ${result.failed} row(s) failed to insert.` : '',
+        ].filter(Boolean).join('\n');
+        alert(msg);
+        setIsUploadModalOpen(false);
+        setSelectedFile(null);
+        fetchData();
+      } else {
+        // FastAPI returns { detail: "..." } or { detail: { message: "..." } }
+        const detail = result.detail;
+        const msg = (typeof detail === 'object' ? detail?.message : detail) || 'Upload failed. Please check the file format.';
+        alert(msg);
+      }
+    } catch (err) {
+      alert(`Upload error: ${err.message}`);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleDownloadTemplate = () => {
-    const headers    = ['first_name', 'last_name', 'email', 'phone'];
-    const sampleData = [
-      ['John', 'Doe',   'john@example.com', '1234567890'],
-      ['Jane', 'Smith', 'jane@example.com', '0987654321']
+    // Build sample precinct value from loaded precincts if available
+    const precinctSample = precincts.length > 0 ? precincts[0].name : 'Precinct A';
+    const wb = XLSX.utils.book_new();
+    const data = [
+      ['first_name', 'last_name', 'email', 'phone', 'precinct'],
+      ['John',  'Doe',   'john@example.com',  '1234567890', precinctSample],
+      ['Jane',  'Smith', 'jane@example.com',  '0987654321', precinctSample],
     ];
-    const csvContent = [headers.join(','), ...sampleData.map(row => row.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'recipient_template.csv');
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Recipients');
+    XLSX.writeFile(wb, 'recipient_template.xlsx');
   };
 
   // ── Lists tab ─────────────────────────────────────────────────────────────
@@ -281,8 +358,8 @@ const Voters = () => {
           <p className="text-sm text-brand-textMuted">All recipients — manage contact information</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outlined" onClick={() => setIsUploadModalOpen(true)} className="inline-flex items-center">
-            <Upload size={16} className="mr-2" /> Upload CSV
+          <Button variant="outlined" onClick={() => { fetchPrecincts(); setIsUploadModalOpen(true); }} className="inline-flex items-center">
+            <Upload size={16} className="mr-2" /> Upload CSV / Excel
           </Button>
           <Button onClick={handleAdd}>+ Add Recipient</Button>
         </div>
@@ -319,68 +396,105 @@ const Voters = () => {
 
       <Modal
         isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
-        title="Upload Recipients from CSV"
+        onClose={() => { setIsUploadModalOpen(false); setSelectedFile(null); }}
+        title="Upload Recipients"
         hideSave={true}
       >
-        <div className="space-y-6">
+        <div className="space-y-5">
+          {/* Format hint */}
           <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
             <div className="flex justify-between items-start mb-3">
-              <h4 className="text-sm font-bold text-brand-blue">CSV Format Requirements:</h4>
+              <h4 className="text-sm font-bold text-brand-blue">File Format Requirements</h4>
               <button
                 onClick={handleDownloadTemplate}
                 className="text-xs flex items-center bg-white px-3 py-1.5 rounded-lg border border-blue-100 text-gray-600 hover:bg-gray-50 transition-colors"
               >
-                <Download size={14} className="mr-1" /> Download Template
+                <Download size={14} className="mr-1" /> Download Template (.xlsx)
               </button>
             </div>
-            <ul className="text-xs space-y-2 text-brand-blue">
-              <li className="flex items-center"><span className="w-1.5 h-1.5 rounded-full bg-brand-blue mr-2"></span> Required columns: <code className="bg-blue-100 px-1 rounded text-[10px]">first_name</code>, <code className="bg-blue-100 px-1 rounded text-[10px]">last_name</code></li>
-              <li className="flex items-center"><span className="w-1.5 h-1.5 rounded-full bg-brand-blue mr-2"></span> Optional columns: <code className="bg-blue-100 px-1 rounded text-[10px]">email</code>, <code className="bg-blue-100 px-1 rounded text-[10px]">phone</code></li>
-              <li className="flex items-center"><span className="w-1.5 h-1.5 rounded-full bg-brand-blue mr-2"></span> File size limit: 10MB</li>
-              <li className="flex items-start pt-1 font-medium italic"><span className="mr-2">💡</span> Tip: Download the template above to see the correct format with sample data</li>
+            <ul className="text-xs space-y-1.5 text-brand-blue">
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-blue shrink-0" />
+                Accepted formats: <code className="bg-blue-100 px-1 rounded">.csv</code> <code className="bg-blue-100 px-1 rounded">.xlsx</code> <code className="bg-blue-100 px-1 rounded">.xls</code>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-blue shrink-0" />
+                Required columns: <code className="bg-blue-100 px-1 rounded">first_name</code> <code className="bg-blue-100 px-1 rounded">last_name</code>
+              </li>
+              <li className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-blue shrink-0" />
+                Optional columns: <code className="bg-blue-100 px-1 rounded">email</code> <code className="bg-blue-100 px-1 rounded">phone</code> <code className="bg-blue-100 px-1 rounded">precinct</code> <code className="bg-blue-100 px-1 rounded">status</code>
+              </li>
             </ul>
           </div>
 
+          {/* Precinct hint */}
+          {precincts.length > 0 && (
+            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3">
+              <p className="text-xs font-bold text-amber-700 mb-1">
+                💡 Precinct column — use one of these names:
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {precincts.map((p) => (
+                  <code key={p.id} className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded">
+                    {p.name}
+                  </code>
+                ))}
+              </div>
+              {precincts.length === 1 && (
+                <p className="text-[10px] text-amber-600 mt-1">
+                  Only one precinct exists — rows without a precinct value will be auto-assigned to it.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* File picker */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-brand-textPrimary">Select CSV File</label>
-            <div className="flex items-center space-x-4">
+            <label className="block text-sm font-medium text-brand-textPrimary">
+              Select File
+            </label>
+            <div className="flex items-center gap-3">
               <input
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileChange}
-                accept=".csv"
+                accept=".csv,.xlsx,.xls"
                 className="hidden"
               />
               <button
-                onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2 bg-blue-50 text-brand-blue rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors"
+                onClick={() => { fetchPrecincts(); fileInputRef.current?.click(); }}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-brand-blue rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors"
               >
+                <FileSpreadsheet size={15} />
                 Choose file
               </button>
-              <span className="text-sm text-gray-400 italic">
+              <span className="text-sm text-gray-400 italic truncate max-w-[200px]">
                 {selectedFile ? selectedFile.name : 'No file chosen'}
               </span>
             </div>
           </div>
 
-          <div className="pt-4 space-y-3">
+          {/* Actions */}
+          <div className="flex gap-3 pt-2">
             <Button
               onClick={handleUpload}
               disabled={!selectedFile || isUploading}
-              className={`w-full py-3 rounded-xl font-bold transition-colors ${!selectedFile || isUploading ? 'bg-gray-100 border-none text-brand-textPrimary hover:bg-gray-200' : 'bg-brand-blue text-white'}`}
+              className={`flex-1 py-3 rounded-xl font-bold transition-colors ${
+                !selectedFile || isUploading
+                  ? 'bg-gray-100 border-none text-brand-textSecondary'
+                  : 'bg-brand-blue text-white'
+              }`}
             >
-              {isUploading ? 'Uploading...' : selectedFile ? 'Upload CSV' : 'Cancel'}
+              {isUploading ? 'Uploading…' : 'Upload'}
             </Button>
-            <div className="flex justify-end pt-2">
-              <Button
-                onClick={() => { setIsUploadModalOpen(false); setSelectedFile(null); }}
-                variant="outlined"
-                className="px-6 py-2 border-brand-border text-brand-textSecondary text-sm"
-              >
-                Cancel
-              </Button>
-            </div>
+            <Button
+              onClick={() => { setIsUploadModalOpen(false); setSelectedFile(null); }}
+              variant="outlined"
+              className="flex-1 py-3 border-brand-border text-brand-textSecondary text-sm rounded-xl"
+            >
+              Cancel
+            </Button>
           </div>
         </div>
       </Modal>

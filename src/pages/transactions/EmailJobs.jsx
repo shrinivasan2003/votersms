@@ -135,6 +135,21 @@ const EmailJobs = () => {
         return <BounceBadge count={a?.bounces} />;
       },
     },
+    {
+      header: 'SCHEDULED',
+      render: (row) => {
+        if (!row.scheduled_at) return <span className="text-xs text-gray-400 italic">Immediate</span>;
+        const isPast = new Date(row.scheduled_at) <= new Date();
+        const dt = new Date(row.scheduled_at).toLocaleString('en-US', {
+          month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        });
+        return (
+          <span className={`text-xs font-medium ${isPast ? 'text-brand-textSecondary' : 'text-amber-600'}`}>
+            {dt}
+          </span>
+        );
+      },
+    },
     { header: 'CREATED', accessor: 'created_at' },
     {
       header: 'ANALYTICS',
@@ -269,8 +284,10 @@ const EmailJobs = () => {
               <input
                 type="datetime-local"
                 name="scheduled_at"
+                min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
                 className="block w-full rounded-lg border border-brand-border px-4 py-3 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue transition-all"
               />
+              <p className="text-xs text-brand-textMuted">Leave empty to send immediately. Must be a future time if set.</p>
             </div>
 
             <div className="flex gap-4 pt-4">

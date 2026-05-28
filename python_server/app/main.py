@@ -1,4 +1,7 @@
 import os
+import asyncio
+import logging
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,6 +42,10 @@ from app.api import (
 from app.dependencies.security import get_current_user
 from app.database import SessionLocal
 from app.utils.password import hash_password
+from app.services.message_processor import process_sms_job, process_email_job
+
+_sched_log      = logging.getLogger("scheduler")
+_sched_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="job-worker")
 
 
 def _ensure_admin_user() -> None:
@@ -79,10 +86,49 @@ def _ensure_admin_user() -> None:
         db.close()
 
 
+async def _scheduler_loop() -> None:
+    """
+    Background loop: every 60 s scan for Pending jobs whose scheduled_at
+    is due (or has no schedule) and dispatch them to the thread-pool.
+    This makes scheduling work automatically — no manual "Process Jobs" click needed.
+    """
+    await asyncio.sleep(15)          # brief startup delay so DB is ready
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                for table, processor in [
+                    ("sms_jobs",   process_sms_job),
+                    ("email_jobs", process_email_job),
+                ]:
+                    rows = db.execute(text(
+                        f"SELECT id FROM {table} "
+                        f"WHERE status = 'Pending' "
+                        f"  AND (scheduled_at IS NULL OR scheduled_at <= NOW())"
+                    )).fetchall()
+                    for (job_id,) in rows:
+                        _sched_log.info("Scheduler: dispatching %s #%s", table, job_id)
+                        loop = asyncio.get_running_loop()
+                        loop.run_in_executor(_sched_executor, processor, job_id)
+            finally:
+                db.close()
+        except Exception as exc:
+            _sched_log.error("Scheduler error: %s", exc)
+        await asyncio.sleep(60)      # check every minute
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _ensure_admin_user()
-    yield
+    task = asyncio.create_task(_scheduler_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 # Disable interactive API docs in production

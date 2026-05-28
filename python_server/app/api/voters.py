@@ -150,24 +150,43 @@ def bulk_voters_upload(
         for p in precincts:
             precinct_map[str(p['id'])] = p['id']
             precinct_map[p['name'].lower()] = p['id']
-            precinct_map[p['code'].lower()] = p['id']
+            if p.get('code'):
+                precinct_map[p['code'].lower()] = p['id']
+        # If there is exactly one precinct, auto-assign rows that omit it
+        auto_precinct = precincts[0]['id'] if len(precincts) == 1 else None
+
         values = []
+        skipped = 0
         for v in voters:
-            pid = v.get('precinct_id')
-            pid_key = str(pid).lower() if pid else None
-            resolved_pid = precinct_map.get(pid_key)
-            if resolved_pid is not None:
-                values.append({
-                    "precinct_id": resolved_pid,
-                    "first_name": v.get('first_name', ''),
-                    "last_name": v.get('last_name', ''),
-                    "email": v.get('email', None),
-                    "phone": v.get('phone', None),
-                    "status": v.get('status', 'Active'),
-                    "customer_id": cid,
-                })
+            first = str(v.get('first_name') or '').strip()
+            last  = str(v.get('last_name')  or '').strip()
+            if not first and not last:
+                skipped += 1
+                continue  # completely empty row
+
+            # Accept both 'precinct_id' and 'precinct' column names
+            raw_pid = v.get('precinct_id') or v.get('precinct') or None
+            if raw_pid:
+                pid_key = str(raw_pid).lower().strip()
+                resolved_pid = precinct_map.get(pid_key)
+            else:
+                resolved_pid = auto_precinct  # None if multiple precincts exist
+
+            values.append({
+                "precinct_id": resolved_pid,
+                "first_name":  first,
+                "last_name":   last,
+                "email":       str(v.get('email')  or '').strip() or None,
+                "phone":       str(v.get('phone')  or '').strip() or None,
+                "status":      str(v.get('status') or 'Active').strip() or 'Active',
+                "customer_id": cid,
+            })
+
         if not values:
-            raise HTTPException(status_code=400, detail={'message': 'No valid precincts found in the data.'})
+            raise HTTPException(
+                status_code=400,
+                detail={'message': 'No valid rows found in the file. Make sure first_name or last_name columns are present.'},
+            )
 
         result = db.execute(
             text("INSERT INTO voters (precinct_id, first_name, last_name, email, phone, status, customer_id) "
@@ -178,9 +197,10 @@ def bulk_voters_upload(
         inserted_count = result.rowcount
         return {
             "message": "Bulk upload successful",
-            "total": len(voters),
+            "total":    len(voters),
             "inserted": inserted_count,
-            "failed": len(voters) - inserted_count,
+            "skipped":  skipped,
+            "failed":   len(voters) - inserted_count - skipped,
         }
     except HTTPException:
         raise

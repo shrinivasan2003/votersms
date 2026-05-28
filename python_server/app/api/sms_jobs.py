@@ -1,11 +1,13 @@
-from fastapi import APIRouter, HTTPException, Body, Depends
+from fastapi import APIRouter, HTTPException, Body, Depends, BackgroundTasks
 from typing import List, Dict, Any
+from datetime import datetime, timezone
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.dependencies.security import get_current_user
 from app.models import User as UserModel
 from app.utils.limits import check_limit
+from app.services.message_processor import process_sms_job
 
 router = APIRouter()
 
@@ -68,6 +70,7 @@ def get_sms_jobs(
 @router.post("/sms-jobs")
 def create_sms_job(
     req: Dict[str, Any] = Body(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(_get_session),
     current_user = Depends(get_current_user),
 ):
@@ -79,6 +82,20 @@ def create_sms_job(
                 {"cid": cid},
             ).fetchone().c
             check_limit(db, cid, "max_sms_jobs", current_count, "SMS Job")
+
+        # Reject past scheduled times
+        scheduled_at_str = req.get('scheduled_at') or None
+        if scheduled_at_str:
+            try:
+                sched_dt = datetime.fromisoformat(scheduled_at_str.replace('Z', '+00:00'))
+                if sched_dt.tzinfo is None:
+                    sched_dt = sched_dt.replace(tzinfo=timezone.utc)
+                if sched_dt <= datetime.now(timezone.utc):
+                    raise HTTPException(status_code=400, detail="Scheduled time must be in the future.")
+            except HTTPException:
+                raise
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid scheduled_at format.")
 
         result = db.execute(
             text("""
@@ -99,7 +116,15 @@ def create_sms_job(
             }
         )
         db.commit()
-        return {"id": result.lastrowid, **req}
+        job_id = result.lastrowid
+
+        scheduled_at_str = req.get('scheduled_at') or None
+        if not scheduled_at_str:
+            # No schedule → send immediately
+            background_tasks.add_task(process_sms_job, job_id)
+        # else: future schedule → scheduler loop will dispatch at the right time
+
+        return {"id": job_id, **req}
     except HTTPException:
         raise
     except Exception as e:

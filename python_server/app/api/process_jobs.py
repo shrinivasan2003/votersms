@@ -36,10 +36,15 @@ def trigger_process_jobs(
         background_tasks.add_task(processor, request.job_id)
         return {"detail": f"Processing {request.job_type.upper()} job {request.job_id} in the background."}
 
-    # No specific job_id — queue all pending jobs up to batch_size
+    # No specific job_id — queue all due pending jobs up to batch_size
     rows = db.execute(
-        text(f"SELECT id FROM {table} WHERE status='Pending' LIMIT :limit"),
-        {"limit": request.batch_size or 100}
+        text(
+            f"SELECT id FROM {table} "
+            f"WHERE status = 'Pending' "
+            f"  AND (scheduled_at IS NULL OR scheduled_at <= NOW()) "
+            f"LIMIT :limit"
+        ),
+        {"limit": request.batch_size or 100},
     ).fetchall()
 
     if not rows:
