@@ -118,13 +118,10 @@ function AdminLoginForm({ onSuccess }) {
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-sm font-bold text-gray-600">Security Verification</label>
-              <SliderCaptcha
-                key={captchaKey}
-                onVerify={(v) => setCaptchaVerified(v)}
-              />
-            </div>
+            <SliderCaptcha
+              key={captchaKey}
+              onVerify={(v) => setCaptchaVerified(v)}
+            />
 
             <button type="submit" disabled={loading || !captchaVerified}
               className="w-full h-12 bg-gradient-to-r from-[#001F3F] to-[#002d5c] hover:from-[#002d5c] hover:to-[#003d7a] disabled:from-gray-300 disabled:to-gray-300 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-lg shadow-[#001F3F]/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 mt-2">

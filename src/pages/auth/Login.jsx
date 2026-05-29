@@ -158,13 +158,10 @@ const Login = () => {
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-gray-600 ml-1">Security Verification</label>
-                  <SliderCaptcha
-                    key={captchaKey}
-                    onVerify={(v) => setCaptchaVerified(v)}
-                  />
-                </div>
+                <SliderCaptcha
+                  key={captchaKey}
+                  onVerify={(v) => setCaptchaVerified(v)}
+                />
 
                 <button
                   type="submit"
