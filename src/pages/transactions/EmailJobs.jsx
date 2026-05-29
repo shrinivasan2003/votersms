@@ -94,6 +94,9 @@ const EmailJobs = () => {
   // Repeat state (all fields managed by RepeatScheduler)
   const [repeat, setRepeat] = useState({ ...DEFAULT_REPEAT });
 
+  // Tab filter for list view
+  const [tab, setTab] = useState('all');
+
   const API_URL = '/api/email-jobs';
 
   const fetchData = async () => {
@@ -355,8 +358,6 @@ const EmailJobs = () => {
   }
 
   // ── Tab filtering ─────────────────────────────────────────────────────────
-  const [tab, setTab] = useState('all');
-
   const completedJobs = jobs.filter(j => j.status === 'Completed');
   const pendingJobs   = jobs.filter(j => j.status !== 'Completed');
   const visibleJobs   = tab === 'completed' ? completedJobs : tab === 'pending' ? pendingJobs : jobs;
