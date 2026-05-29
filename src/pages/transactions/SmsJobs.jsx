@@ -1,4 +1,33 @@
 import { useState, useEffect, useCallback } from 'react';
+import RepeatScheduler, { DEFAULT_REPEAT } from '../../components/shared/RepeatScheduler';
+
+// Parse a UTC datetime string from DB (may lack 'Z') as a proper UTC Date
+const parseUTC = (str) => {
+  if (!str) return null;
+  const s = str.includes('Z') || str.includes('+') ? str : str + 'Z';
+  return new Date(s);
+};
+
+// Display a UTC datetime string in the given IANA timezone
+const toLocalDisplay = (utcStr, ianaT) => {
+  const d = parseUTC(utcStr);
+  if (!d) return null;
+  try {
+    return d.toLocaleString('en-US', {
+      timeZone: ianaT,
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+};
+
+// Format a Date as "YYYY-MM-DDTHH:mm" in browser local time (for datetime-local min)
+const toLocalISO = (d) => {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
 import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
@@ -24,6 +53,9 @@ const SmsJobs = () => {
   const [loading, setLoading]       = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
   const [recipient, setRecipient]   = useState({ type: 'list', precinct_id: null, list_id: null, voter_id: null });
+  const [customerTz, setCustomerTz] = useState('UTC');
+  const [tzShort, setTzShort]       = useState('UTC');
+  const [repeat, setRepeat]         = useState({ ...DEFAULT_REPEAT });
   const { getAuthHeaders, user }    = useAuth();
 
   const API_URL = '/api/sms-jobs';
@@ -31,19 +63,24 @@ const SmsJobs = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [jobsRes, listsRes, templatesRes, providersRes] = await Promise.all([
+      const [jobsRes, listsRes, templatesRes, providersRes, settingsRes] = await Promise.all([
         fetch(API_URL),
         fetch('/api/contact-lists'),
         fetch('/api/sms-templates'),
         fetch('/api/sms-providers'),
+        fetch('/api/customers/my-settings'),
       ]);
-      const [jobsData, listsData, templatesData, providersData] = await Promise.all([
-        jobsRes.json(), listsRes.json(), templatesRes.json(), providersRes.json(),
+      const [jobsData, listsData, templatesData, providersData, settingsData] = await Promise.all([
+        jobsRes.json(), listsRes.json(), templatesRes.json(), providersRes.json(), settingsRes.json(),
       ]);
       setJobs(Array.isArray(jobsData)           ? jobsData       : []);
       setLists(Array.isArray(listsData)         ? listsData      : []);
       setTemplates(Array.isArray(templatesData) ? templatesData  : []);
       setProviders(Array.isArray(providersData) ? providersData  : []);
+      if (settingsData?.timezone) {
+        setCustomerTz(settingsData.timezone);
+        setTzShort(settingsData.timezone_short?.[settingsData.timezone] || settingsData.timezone);
+      }
     } catch (err) {
       console.error('Failed to fetch data:', err);
     } finally {
@@ -64,8 +101,7 @@ const SmsJobs = () => {
 
   useEffect(() => { fetchData(); }, []);
 
-  const fmtDt = (d) =>
-    d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
+  const fmtDt = (d) => toLocalDisplay(d, customerTz);
 
   const columns = [
     { header: 'ID',         render: (row) => `#${row.id}` },
@@ -78,19 +114,34 @@ const SmsJobs = () => {
         return <Badge variant={v}>{row.status}</Badge>;
     }},
     { header: 'SCHEDULED', render: (row) => {
+        const every = row.repeat_every || 1;
+        const repeatLabels = {
+          alternateday: 'Alt. day', daily: `Every ${every > 1 ? every+'d' : 'day'}`,
+          weekly: `Every ${every > 1 ? every+'w' : 'week'}`, monthly: `Every ${every > 1 ? every+'mo' : 'month'}`,
+          quarterly: 'Quarterly', yearly: 'Yearly',
+        };
         const dt = fmtDt(row.scheduled_at);
-        if (!dt) return <span className="text-xs text-gray-400 italic">Immediate</span>;
-        const isPast = new Date(row.scheduled_at) <= new Date();
         return (
-          <span className={`text-xs font-medium ${isPast ? 'text-brand-textSecondary' : 'text-amber-600'}`}>
-            {dt}
-          </span>
+          <div className="text-xs">
+            {dt ? (
+              <span className={`font-medium ${parseUTC(row.scheduled_at) > new Date() ? 'text-amber-600' : 'text-brand-textSecondary'}`}>
+                {dt}{tzShort && <span className="ml-1 text-[10px] text-gray-400">({tzShort})</span>}
+              </span>
+            ) : (
+              <span className="text-gray-400 italic">Immediate</span>
+            )}
+            {row.repeat_type && (
+              <span className="ml-1 px-1.5 py-0.5 bg-violet-100 text-violet-700 text-[10px] font-bold rounded-full whitespace-nowrap">
+                ↺ {repeatLabels[row.repeat_type] || row.repeat_type}
+              </span>
+            )}
+          </div>
         );
     }},
     { header: 'CREATED', accessor: 'created_at' },
   ];
 
-  const handleBack = () => { setView('list'); setSelectedJob(null); };
+  const handleBack = () => { setView('list'); setSelectedJob(null); setRepeat({ ...DEFAULT_REPEAT }); };
 
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this job?')) return;
@@ -114,13 +165,23 @@ const SmsJobs = () => {
       return;
     }
 
+    const isRepeat   = repeat.enabled;
+    const repeatType = repeat.type;
+
     const data = {
       precinct_id:  recipient.type === 'precinct'   ? (recipient.precinct_id || null) : null,
       list_id:      recipient.type === 'list'        ? (recipient.list_id     || null) : null,
       voter_id:     recipient.type === 'individual'  ? (recipient.voter_id    || null) : null,
       template_id:  fd.get('template_id'),
       provider_id:  fd.get('provider_id') || null,
-      scheduled_at: fd.get('scheduled_at') || null,
+      scheduled_at: isRepeat ? repeat.scheduledAt : (fd.get('scheduled_at') || null),
+      repeat_type:  isRepeat ? repeatType : null,
+      repeat_every: isRepeat ? (repeatType === 'quarterly' ? 3 : repeat.every) : null,
+      repeat_days:  isRepeat && repeatType === 'weekly' ? JSON.stringify([repeat.day.toLowerCase()]) : null,
+      repeat_time:  isRepeat ? repeat.time   : null,
+      repeat_until: isRepeat && repeat.untilType === 'date' ? repeat.untilDate : null,
+      repeat_dom:   isRepeat && ['monthly','quarterly','yearly'].includes(repeatType) ? repeat.dom : null,
+      repeat_month: isRepeat && repeatType === 'yearly' ? repeat.monthNum : null,
     };
 
     try {
@@ -186,20 +247,29 @@ const SmsJobs = () => {
               </div>
             </div>
 
-            {/* Schedule */}
-            <div className="space-y-2">
-              <label className="block text-sm font-bold text-brand-textPrimary">Scheduled At (Optional)</label>
-              <input
-                type="datetime-local"
-                name="scheduled_at"
-                min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
-                className="block w-full rounded-lg border border-brand-border px-4 py-3 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue transition-all"
-              />
-              <p className="text-xs text-brand-textMuted">Leave empty to send immediately. Must be a future time if set.</p>
-            </div>
+            {/* Schedule / Repeat */}
+            <RepeatScheduler value={repeat} onChange={setRepeat} tzShort={tzShort} />
+
+            {!repeat.enabled && (
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-brand-textPrimary">
+                  Scheduled At (Optional)
+                  {tzShort && <span className="ml-2 text-xs font-normal text-brand-textMuted">— times in {tzShort}</span>}
+                </label>
+                <input
+                  type="datetime-local"
+                  name="scheduled_at"
+                  min={toLocalISO(new Date(Date.now() + 60000))}
+                  className="block w-full rounded-lg border border-brand-border px-4 py-3 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue transition-all"
+                />
+                <p className="text-xs text-brand-textMuted">Leave empty to send immediately. Must be a future time if set.</p>
+              </div>
+            )}
 
             <div className="flex gap-4 pt-4">
-              <Button type="submit" className="flex-1 py-3.5">Create Job</Button>
+              <Button type="submit" className="flex-1 py-3.5">
+                {repeat.enabled ? '↺ Create Recurring Job' : 'Create Job'}
+              </Button>
               <Button type="button" variant="outlined" onClick={handleBack} className="flex-1 py-3.5 bg-gray-200">Cancel</Button>
             </div>
           </form>

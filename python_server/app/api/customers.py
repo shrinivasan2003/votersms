@@ -9,6 +9,7 @@ from app.schemas import CustomerCreate, UserOut
 from app.dependencies.security import get_current_user
 from app.utils.password import hash_password
 from app.utils.email import send_welcome_email
+from app.utils.timezone import TIMEZONE_OPTIONS, TIMEZONE_SHORT
 
 router = APIRouter()
 
@@ -169,6 +170,51 @@ def delete_customer_user(
     return {"message": "User deleted"}
 
 
+# ── Customer timezone settings (org users) — must be before /{customer_id} ───
+
+@router.get("/customers/my-settings")
+def get_my_settings(
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user),
+):
+    """Return the current customer's settings including timezone."""
+    cid = current_user.customer_id
+    if not cid:
+        return {"timezone": "UTC", "timezone_options": TIMEZONE_OPTIONS, "timezone_short": TIMEZONE_SHORT}
+    row = db.execute(
+        text("SELECT timezone FROM customers WHERE id=:cid"), {"cid": cid}
+    ).fetchone()
+    tz = row.timezone if row and row.timezone else "UTC"
+    return {
+        "timezone": tz,
+        "timezone_options": TIMEZONE_OPTIONS,
+        "timezone_short": TIMEZONE_SHORT,
+    }
+
+
+@router.put("/customers/my-settings")
+def update_my_settings(
+    payload: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user),
+):
+    """Update the current customer's settings (timezone etc.)."""
+    cid = current_user.customer_id
+    if not cid:
+        raise HTTPException(status_code=403, detail="Only organisation users can update settings")
+    tz = payload.get("timezone", "UTC")
+    if tz not in TIMEZONE_OPTIONS:
+        raise HTTPException(status_code=400, detail=f"Unsupported timezone. Allowed: {list(TIMEZONE_OPTIONS.keys())}")
+    db.execute(
+        text("UPDATE customers SET timezone=:tz WHERE id=:cid"),
+        {"tz": tz, "cid": cid}
+    )
+    db.commit()
+    return {"message": "Settings saved", "timezone": tz}
+
+
+# ── Customer CRUD (platform admin) ────────────────────────────────────────────
+
 @router.put("/customers/{customer_id}")
 def update_customer(
     customer_id: int,
@@ -246,3 +292,6 @@ def update_settings(
             )
     db.commit()
     return {"message": "Settings saved"}
+
+
+

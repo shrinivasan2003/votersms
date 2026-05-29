@@ -5,6 +5,34 @@ import Badge from '../../components/shared/Badge';
 import RecipientPicker from '../../components/shared/RecipientPicker';
 import { useJobPolling } from '../../hooks/useJobPolling';
 
+// Parse a UTC datetime string from DB (may lack 'Z') as a proper UTC Date
+const parseUTC = (str) => {
+  if (!str) return null;
+  const s = str.includes('Z') || str.includes('+') ? str : str + 'Z';
+  return new Date(s);
+};
+
+// Display a UTC datetime string in the given IANA timezone
+const toLocalDisplay = (utcStr, ianaT) => {
+  const d = parseUTC(utcStr);
+  if (!d) return null;
+  try {
+    return d.toLocaleString('en-US', {
+      timeZone: ianaT,
+      month: 'short', day: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+};
+
+// Format a Date as "YYYY-MM-DDTHH:mm" in browser local time (for datetime-local min)
+const toLocalISO = (d) => {
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
 const RecipientCell = ({ row }) => {
   if (row.voter_name && row.voter_id)
     return <span className="font-medium text-brand-textPrimary">{row.voter_name}</span>;
@@ -21,25 +49,32 @@ const WhatsappJobs = () => {
   const [providers, setProviders] = useState([]);
   const [loading, setLoading]     = useState(false);
   const [recipient, setRecipient] = useState({ type: 'list', precinct_id: null, list_id: null, voter_id: null });
+  const [customerTz, setCustomerTz] = useState('UTC');
+  const [tzShort, setTzShort]       = useState('UTC');
 
   const API_URL = '/api/whatsapp-jobs';
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [jobsRes, listsRes, templatesRes, providersRes] = await Promise.all([
+      const [jobsRes, listsRes, templatesRes, providersRes, settingsRes] = await Promise.all([
         fetch(API_URL),
         fetch('/api/contact-lists'),
         fetch('/api/whatsapp-templates'),
         fetch('/api/whatsapp-providers'),
+        fetch('/api/customers/my-settings'),
       ]);
-      const [jobsData, listsData, templatesData, providersData] = await Promise.all([
-        jobsRes.json(), listsRes.json(), templatesRes.json(), providersRes.json(),
+      const [jobsData, listsData, templatesData, providersData, settingsData] = await Promise.all([
+        jobsRes.json(), listsRes.json(), templatesRes.json(), providersRes.json(), settingsRes.json(),
       ]);
       setJobs(Array.isArray(jobsData)           ? jobsData      : []);
       setLists(Array.isArray(listsData)         ? listsData     : []);
       setTemplates(Array.isArray(templatesData) ? templatesData : []);
       setProviders(Array.isArray(providersData) ? providersData : []);
+      if (settingsData?.timezone) {
+        setCustomerTz(settingsData.timezone);
+        setTzShort(settingsData.timezone_short?.[settingsData.timezone] || settingsData.timezone);
+      }
     } catch (err) {
       console.error('Failed to fetch data:', err);
     } finally {
@@ -71,6 +106,16 @@ const WhatsappJobs = () => {
           {row.status}
         </Badge>
     )},
+    { header: 'SCHEDULED', render: (row) => {
+        if (!row.scheduled_at) return <span className="text-xs text-gray-400 italic">Immediate</span>;
+        const isPast = parseUTC(row.scheduled_at) <= new Date();
+        return (
+          <span className={`text-xs font-medium ${isPast ? 'text-brand-textSecondary' : 'text-amber-600'}`}>
+            {toLocalDisplay(row.scheduled_at, customerTz)}
+            {tzShort && <span className="ml-1 text-[10px] text-gray-400">({tzShort})</span>}
+          </span>
+        );
+    }},
     { header: 'CREATED', accessor: 'created_at' },
   ];
 
@@ -171,9 +216,14 @@ const WhatsappJobs = () => {
 
             {/* Schedule */}
             <div className="space-y-2">
-              <label className="block text-sm font-bold text-brand-textPrimary">Scheduled At (Optional)</label>
+              <label className="block text-sm font-bold text-brand-textPrimary">
+                Scheduled At (Optional)
+                {tzShort && <span className="ml-2 text-xs font-normal text-brand-textMuted">— times in {tzShort}</span>}
+              </label>
               <input type="datetime-local" name="scheduled_at"
+                min={toLocalISO(new Date(Date.now() + 60000))}
                 className="block w-full rounded-lg border border-brand-border px-4 py-3 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue transition-all" />
+              <p className="text-xs text-brand-textMuted">Leave empty to send immediately.</p>
             </div>
 
             <div className="flex gap-4 pt-4">

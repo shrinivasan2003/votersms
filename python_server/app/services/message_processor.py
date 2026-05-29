@@ -7,6 +7,7 @@ from twilio.rest import Client
 import httpx
 import logging
 import re
+import calendar
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -73,6 +74,15 @@ def _substitute(body: str, voter: dict, meta: dict) -> str:
     return body
 
 
+def _add_months(dt: datetime, months: int) -> datetime:
+    """Add N calendar months to a datetime, clamping to the last valid day of the target month."""
+    month = dt.month - 1 + months
+    year  = dt.year + month // 12
+    month = month % 12 + 1
+    max_day = calendar.monthrange(year, month)[1]
+    return dt.replace(year=year, month=month, day=min(dt.day, max_day))
+
+
 def _calc_next_run(job):
     """Calculate the next scheduled_at for a recurring job based on the previous run time."""
     if not getattr(job, 'repeat_type', None):
@@ -80,12 +90,26 @@ def _calc_next_run(job):
     base  = job.scheduled_at or datetime.utcnow()
     every = int(getattr(job, 'repeat_every', None) or 1)
     rtype = job.repeat_type
-    if rtype == 'daily':
+
+    if rtype == 'alternateday':
+        next_dt = base + timedelta(days=2)
+    elif rtype == 'daily':
         next_dt = base + timedelta(days=every)
     elif rtype == 'weekly':
         next_dt = base + timedelta(weeks=every)
+    elif rtype == 'monthly':
+        next_dt = _add_months(base, every)
+    elif rtype == 'quarterly':
+        next_dt = _add_months(base, 3)
+    elif rtype == 'yearly':
+        try:
+            next_dt = base.replace(year=base.year + 1)
+        except ValueError:
+            # Feb 29 in a leap year → use Feb 28 in non-leap
+            next_dt = base.replace(year=base.year + 1, day=28)
     else:
         return None
+
     until = getattr(job, 'repeat_until', None)
     if until and next_dt.date() > until:
         return None
@@ -98,36 +122,80 @@ def _spawn_next_email_job(db, job):
     if not next_run:
         logger.info(f"Email Job {job.id}: repeat cycle ended (past repeat_until or unknown type)")
         return
-    # Always point back to the very first job in the chain
     original_parent = getattr(job, 'parent_job_id', None) or job.id
     db.execute(text("""
         INSERT INTO email_jobs
             (name, precinct_id, template_id, provider_id, list_id, voter_id,
              scheduled_at, status, customer_id, created_by,
-             repeat_type, repeat_every, repeat_days, repeat_time, repeat_until, parent_job_id)
+             repeat_type, repeat_every, repeat_days, repeat_time, repeat_until, parent_job_id,
+             repeat_dom, repeat_month)
         VALUES
             (:name, :precinct_id, :template_id, :provider_id, :list_id, :voter_id,
              :scheduled_at, 'Pending', :customer_id, :created_by,
-             :repeat_type, :repeat_every, :repeat_days, :repeat_time, :repeat_until, :parent_job_id)
+             :repeat_type, :repeat_every, :repeat_days, :repeat_time, :repeat_until, :parent_job_id,
+             :repeat_dom, :repeat_month)
     """), {
-        "name":           job.name,
-        "precinct_id":    job.precinct_id,
-        "template_id":    job.template_id,
-        "provider_id":    job.provider_id,
-        "list_id":        getattr(job, 'list_id', None),
-        "voter_id":       getattr(job, 'voter_id', None),
-        "scheduled_at":   next_run,
-        "customer_id":    getattr(job, 'customer_id', None),
-        "created_by":     getattr(job, 'created_by', None),
-        "repeat_type":    job.repeat_type,
-        "repeat_every":   getattr(job, 'repeat_every', 1),
-        "repeat_days":    getattr(job, 'repeat_days', None),
-        "repeat_time":    getattr(job, 'repeat_time', None),
-        "repeat_until":   getattr(job, 'repeat_until', None),
-        "parent_job_id":  original_parent,
+        "name":          job.name,
+        "precinct_id":   job.precinct_id,
+        "template_id":   job.template_id,
+        "provider_id":   job.provider_id,
+        "list_id":       getattr(job, 'list_id', None),
+        "voter_id":      getattr(job, 'voter_id', None),
+        "scheduled_at":  next_run,
+        "customer_id":   getattr(job, 'customer_id', None),
+        "created_by":    getattr(job, 'created_by', None),
+        "repeat_type":   job.repeat_type,
+        "repeat_every":  getattr(job, 'repeat_every', 1),
+        "repeat_days":   getattr(job, 'repeat_days', None),
+        "repeat_time":   getattr(job, 'repeat_time', None),
+        "repeat_until":  getattr(job, 'repeat_until', None),
+        "parent_job_id": original_parent,
+        "repeat_dom":    getattr(job, 'repeat_dom', None),
+        "repeat_month":  getattr(job, 'repeat_month', None),
     })
     db.commit()
     logger.info(f"Email Job {job.id}: spawned next occurrence scheduled at {next_run}")
+
+
+def _spawn_next_sms_job(db, job):
+    """Create the next pending occurrence of a recurring SMS job."""
+    next_run = _calc_next_run(job)
+    if not next_run:
+        logger.info(f"SMS Job {job.id}: repeat cycle ended")
+        return
+    original_parent = getattr(job, 'parent_job_id', None) or job.id
+    db.execute(text("""
+        INSERT INTO sms_jobs
+            (name, precinct_id, template_id, provider_id, list_id, voter_id,
+             scheduled_at, status, customer_id, created_by,
+             repeat_type, repeat_every, repeat_days, repeat_time, repeat_until, parent_job_id,
+             repeat_dom, repeat_month)
+        VALUES
+            (:name, :precinct_id, :template_id, :provider_id, :list_id, :voter_id,
+             :scheduled_at, 'Pending', :customer_id, :created_by,
+             :repeat_type, :repeat_every, :repeat_days, :repeat_time, :repeat_until, :parent_job_id,
+             :repeat_dom, :repeat_month)
+    """), {
+        "name":          getattr(job, 'name', None),
+        "precinct_id":   job.precinct_id,
+        "template_id":   job.template_id,
+        "provider_id":   job.provider_id,
+        "list_id":       getattr(job, 'list_id', None),
+        "voter_id":      getattr(job, 'voter_id', None),
+        "scheduled_at":  next_run,
+        "customer_id":   getattr(job, 'customer_id', None),
+        "created_by":    getattr(job, 'created_by', None),
+        "repeat_type":   job.repeat_type,
+        "repeat_every":  getattr(job, 'repeat_every', 1),
+        "repeat_days":   getattr(job, 'repeat_days', None),
+        "repeat_time":   getattr(job, 'repeat_time', None),
+        "repeat_until":  getattr(job, 'repeat_until', None),
+        "parent_job_id": original_parent,
+        "repeat_dom":    getattr(job, 'repeat_dom', None),
+        "repeat_month":  getattr(job, 'repeat_month', None),
+    })
+    db.commit()
+    logger.info(f"SMS Job {job.id}: spawned next occurrence scheduled at {next_run}")
 
 
 def _resolve_voters(db, job, channel: str) -> list:
@@ -265,6 +333,10 @@ def process_sms_job(job_id: int):
         job.recipients = total
         db.commit()
 
+        # Spawn next occurrence if this is a recurring job
+        if getattr(job, 'repeat_type', None):
+            _spawn_next_sms_job(db, job)
+
     except Exception as e:
         logger.error(f"Error processing SMS job {job_id}: {e}")
         if 'job' in locals() and job:
@@ -352,9 +424,6 @@ def process_email_job(job_id: int):
                 )
                 subject = getattr(template, "subject", None) or template.name
 
-                # Build Reply-To with mailbox hash so inbound replies
-                # auto-match back to this job + voter.
-                # Format: reply+{job_id}_{voter_id}@inbound.yourdomain.com
                 import os as _os
                 _inbound_base = _os.getenv("INBOUND_EMAIL_ADDRESS", "")
                 payload = {
@@ -367,9 +436,17 @@ def process_email_job(job_id: int):
                     "TrackOpens":    True,
                     "TrackLinks":    "HtmlAndText",
                 }
+                # CC / BCC from template (applied to every sent message)
+                if getattr(template, 'cc', None):
+                    payload["Cc"] = template.cc
+                if getattr(template, 'bcc', None):
+                    payload["Bcc"] = template.bcc
+                # Reply-To: inbound routing hash takes precedence; fall back to template reply_to
                 if _inbound_base and "@" in _inbound_base:
                     _local, _domain = _inbound_base.split("@", 1)
                     payload["ReplyTo"] = f"{_local}+{job_id}_{voter['id']}@{_domain}"
+                elif getattr(template, 'reply_to', None):
+                    payload["ReplyTo"] = template.reply_to
 
                 try:
                     response = client.post(postmark_api_url, json=payload, headers=http_headers)

@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
-import { BarChart2, Trash2, RefreshCw } from 'lucide-react';
+import { BarChart2 } from 'lucide-react';
 import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
 import RecipientPicker from '../../components/shared/RecipientPicker';
 import EmailAnalyticsModal from '../../components/shared/EmailAnalyticsModal';
+import RepeatScheduler, { DEFAULT_REPEAT } from '../../components/shared/RepeatScheduler';
 import { useJobPolling } from '../../hooks/useJobPolling';
 
 const RecipientCell = ({ row }) => {
@@ -32,40 +33,44 @@ const BounceBadge = ({ count }) => {
 
 const RepeatBadge = ({ row }) => {
   if (!row.repeat_type) return null;
-  const label = row.repeat_type === 'daily'
-    ? `Every ${row.repeat_every > 1 ? row.repeat_every + 'd' : 'day'}`
-    : `Every ${row.repeat_every > 1 ? row.repeat_every + 'w' : 'week'}`;
+  const every = row.repeat_every || 1;
+  const labels = {
+    alternateday: 'Alt. day',
+    daily:        `Every ${every > 1 ? every + 'd' : 'day'}`,
+    weekly:       `Every ${every > 1 ? every + 'w' : 'week'}`,
+    monthly:      `Every ${every > 1 ? every + 'mo' : 'month'}`,
+    quarterly:    'Quarterly',
+    yearly:       'Yearly',
+  };
   return (
     <span className="ml-1 px-1.5 py-0.5 bg-violet-100 text-violet-700 text-[10px] font-bold rounded-full whitespace-nowrap">
-      ↺ {label}
+      ↺ {labels[row.repeat_type] || row.repeat_type}
     </span>
   );
 };
 
-// ── Weekday picker helpers ────────────────────────────────────────────────────
-const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+// ── Timezone / date helpers ───────────────────────────────────────────────────
 
-const getNextOccurrence = (dayName, timeStr) => {
-  const idx = DAYS.findIndex(d => d.toLowerCase() === dayName.toLowerCase());
-  if (idx === -1) return '';
-  const [h, m] = (timeStr || '09:00').split(':').map(Number);
-  const now = new Date();
-  // JS: 0=Sun,1=Mon...6=Sat → our DAYS: 0=Mon...6=Sun
-  const jsTarget = (idx + 1) % 7; // Mon=1, Tue=2, ... Sun=0
-  let diff = (jsTarget - now.getDay() + 7) % 7;
-  if (diff === 0) diff = 7; // always next week, not today
-  const result = new Date(now);
-  result.setDate(now.getDate() + diff);
-  result.setHours(h, m, 0, 0);
-  return result.toISOString().slice(0, 16);
+const pad = n => String(n).padStart(2, '0');
+const toLocalISO = (d) =>
+  `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+const parseUTC = (str) => {
+  if (!str) return null;
+  const s = str.includes('Z') || str.includes('+') ? str : str + 'Z';
+  return new Date(s);
 };
 
-const getNextDaily = (everyDays, timeStr) => {
-  const [h, m] = (timeStr || '09:00').split(':').map(Number);
-  const result = new Date();
-  result.setDate(result.getDate() + (everyDays || 1));
-  result.setHours(h, m, 0, 0);
-  return result.toISOString().slice(0, 16);
+const toLocalDisplay = (utcStr, ianaT) => {
+  const d = parseUTC(utcStr);
+  if (!d) return null;
+  try {
+    return d.toLocaleString('en-US', {
+      timeZone: ianaT, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -82,41 +87,34 @@ const EmailJobs = () => {
     type: 'list', precinct_id: null, list_id: null, voter_id: null,
   });
 
-  // Repeat state
-  const [repeatEnabled, setRepeatEnabled]   = useState(false);
-  const [repeatType, setRepeatType]         = useState('weekly');  // 'daily' | 'weekly'
-  const [repeatEvery, setRepeatEvery]       = useState(1);
-  const [repeatDay, setRepeatDay]           = useState('Friday');
-  const [repeatTime, setRepeatTime]         = useState('09:00');
-  const [repeatUntilType, setRepeatUntilType] = useState('never'); // 'never' | 'date'
-  const [repeatUntilDate, setRepeatUntilDate] = useState('');
-  const [scheduledAt, setScheduledAt]       = useState('');
+  // Customer timezone (IANA name + short label)
+  const [customerTz, setCustomerTz] = useState('UTC');
+  const [tzShort, setTzShort]       = useState('UTC');
+
+  // Repeat state (all fields managed by RepeatScheduler)
+  const [repeat, setRepeat] = useState({ ...DEFAULT_REPEAT });
 
   const API_URL = '/api/email-jobs';
-
-  // Auto-compute first run when repeat settings change
-  useEffect(() => {
-    if (!repeatEnabled) return;
-    if (repeatType === 'weekly') {
-      setScheduledAt(getNextOccurrence(repeatDay, repeatTime));
-    } else {
-      setScheduledAt(getNextDaily(repeatEvery, repeatTime));
-    }
-  }, [repeatEnabled, repeatType, repeatEvery, repeatDay, repeatTime]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [jobsRes, listsRes, templatesRes, providersRes, analyticsRes] = await Promise.all([
+      const [jobsRes, listsRes, templatesRes, providersRes, analyticsRes, settingsRes] = await Promise.all([
         fetch(API_URL),
         fetch('/api/contact-lists'),
         fetch('/api/email-templates'),
         fetch('/api/email-providers'),
         fetch('/api/email-analytics'),
+        fetch('/api/customers/my-settings'),
       ]);
-      const [jobsData, listsData, templatesData, providersData, analyticsData] = await Promise.all([
-        jobsRes.json(), listsRes.json(), templatesRes.json(), providersRes.json(), analyticsRes.json(),
+      const [jobsData, listsData, templatesData, providersData, analyticsData, settingsData] = await Promise.all([
+        jobsRes.json(), listsRes.json(), templatesRes.json(), providersRes.json(), analyticsRes.json(), settingsRes.json(),
       ]);
+      // Update customer timezone
+      if (settingsData?.timezone) {
+        setCustomerTz(settingsData.timezone);
+        setTzShort(settingsData.timezone_short?.[settingsData.timezone] || settingsData.timezone);
+      }
       setJobs(Array.isArray(jobsData)           ? jobsData      : []);
       setLists(Array.isArray(listsData)         ? listsData     : []);
       setTemplates(Array.isArray(templatesData) ? templatesData : []);
@@ -180,9 +178,12 @@ const EmailJobs = () => {
       render: (row) => (
         <div className="text-xs">
           {row.scheduled_at ? (
-            <span className={new Date(row.scheduled_at) > new Date() ? 'text-amber-600 font-medium' : 'text-brand-textSecondary'}>
-              {new Date(row.scheduled_at).toLocaleString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' })}
-            </span>
+            <div>
+              <span className={parseUTC(row.scheduled_at) > new Date() ? 'text-amber-600 font-medium' : 'text-brand-textSecondary'}>
+                {toLocalDisplay(row.scheduled_at, customerTz)}
+              </span>
+              {tzShort && <span className="ml-1 text-[10px] text-gray-400">({tzShort})</span>}
+            </div>
           ) : (
             <span className="text-gray-400 italic">Immediate</span>
           )}
@@ -210,14 +211,7 @@ const EmailJobs = () => {
 
   const handleBack = () => {
     setView('list');
-    setRepeatEnabled(false);
-    setRepeatType('weekly');
-    setRepeatEvery(1);
-    setRepeatDay('Friday');
-    setRepeatTime('09:00');
-    setRepeatUntilType('never');
-    setRepeatUntilDate('');
-    setScheduledAt('');
+    setRepeat({ ...DEFAULT_REPEAT });
   };
 
   const handleDelete = async (row) => {
@@ -236,9 +230,12 @@ const EmailJobs = () => {
     if (recipient.type === 'individual' && !recipient.voter_id) {
       alert('Please search and select an individual recipient.'); return;
     }
-    if (repeatEnabled && !scheduledAt) {
+    if (repeat.enabled && !repeat.scheduledAt) {
       alert('Please set a first run date/time for the recurring job.'); return;
     }
+
+    const isRepeat   = repeat.enabled;
+    const repeatType = repeat.type;
 
     const data = {
       name:         fd.get('job_name') || null,
@@ -247,13 +244,15 @@ const EmailJobs = () => {
       voter_id:     recipient.type === 'individual' ? (recipient.voter_id    || null) : null,
       template_id:  fd.get('template_id'),
       provider_id:  fd.get('provider_id') || null,
-      scheduled_at: repeatEnabled ? scheduledAt : (fd.get('scheduled_at') || null),
+      scheduled_at: isRepeat ? repeat.scheduledAt : (fd.get('scheduled_at') || null),
       // repeat fields
-      repeat_type:  repeatEnabled ? repeatType  : null,
-      repeat_every: repeatEnabled ? repeatEvery : null,
-      repeat_days:  repeatEnabled && repeatType === 'weekly' ? JSON.stringify([repeatDay.toLowerCase()]) : null,
-      repeat_time:  repeatEnabled ? repeatTime  : null,
-      repeat_until: repeatEnabled && repeatUntilType === 'date' ? repeatUntilDate : null,
+      repeat_type:  isRepeat ? repeatType : null,
+      repeat_every: isRepeat ? (repeatType === 'quarterly' ? 3 : repeat.every) : null,
+      repeat_days:  isRepeat && repeatType === 'weekly' ? JSON.stringify([repeat.day.toLowerCase()]) : null,
+      repeat_time:  isRepeat ? repeat.time   : null,
+      repeat_until: isRepeat && repeat.untilType === 'date' ? repeat.untilDate : null,
+      repeat_dom:   isRepeat && ['monthly','quarterly','yearly'].includes(repeatType) ? repeat.dom : null,
+      repeat_month: isRepeat && repeatType === 'yearly' ? repeat.monthNum : null,
     };
 
     try {
@@ -266,13 +265,6 @@ const EmailJobs = () => {
       else alert((await res.json()).detail || 'Failed to create job');
     } catch (err) { console.error(err); }
   };
-
-  // ── Repeat preview label ───────────────────────────────────────────────────
-  const repeatPreview = repeatEnabled
-    ? repeatType === 'weekly'
-      ? `Every ${repeatEvery > 1 ? repeatEvery + ' weeks' : 'week'} on ${repeatDay} at ${repeatTime}`
-      : `Every ${repeatEvery > 1 ? repeatEvery + ' days' : 'day'} at ${repeatTime}`
-    : '';
 
   // ── Create form ───────────────────────────────────────────────────────────
   if (view === 'add') {
@@ -328,158 +320,20 @@ const EmailJobs = () => {
               </div>
             </div>
 
-            {/* ── Repeat section ───────────────────────────────────────────── */}
-            <div className="border border-brand-border rounded-xl overflow-hidden">
-              {/* Toggle header */}
-              <div
-                className={`flex items-center justify-between px-5 py-4 cursor-pointer transition-colors ${repeatEnabled ? 'bg-violet-50' : 'bg-gray-50'}`}
-                onClick={() => setRepeatEnabled(v => !v)}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">↺</span>
-                  <div>
-                    <p className="text-sm font-bold text-brand-textPrimary">Repeat this job</p>
-                    {repeatEnabled && repeatPreview && (
-                      <p className="text-xs text-violet-600 font-medium mt-0.5">{repeatPreview}</p>
-                    )}
-                    {!repeatEnabled && <p className="text-xs text-brand-textMuted">Send once at a scheduled time or repeat automatically</p>}
-                  </div>
-                </div>
-                <div className={`w-11 h-6 rounded-full transition-colors relative ${repeatEnabled ? 'bg-violet-600' : 'bg-gray-300'}`}>
-                  <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${repeatEnabled ? 'left-5' : 'left-0.5'}`} />
-                </div>
-              </div>
-
-              {repeatEnabled && (
-                <div className="p-5 space-y-5 border-t border-brand-border">
-                  {/* Type: Daily / Weekly */}
-                  <div className="flex gap-3">
-                    {['daily','weekly'].map(t => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setRepeatType(t)}
-                        className={`flex-1 py-2.5 rounded-lg text-sm font-bold border transition-all capitalize ${
-                          repeatType === t
-                            ? 'bg-violet-600 text-white border-violet-600'
-                            : 'bg-white text-brand-textPrimary border-brand-border hover:border-violet-300'
-                        }`}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Every N + Time */}
-                  <div className="flex gap-4 flex-wrap">
-                    <div className="space-y-1 flex-1 min-w-[120px]">
-                      <label className="text-xs font-bold text-brand-textSecondary uppercase tracking-wide">
-                        Every
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min={1}
-                          max={30}
-                          value={repeatEvery}
-                          onChange={e => setRepeatEvery(Math.max(1, parseInt(e.target.value) || 1))}
-                          className="w-16 rounded-lg border border-brand-border px-3 py-2 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-400"
-                        />
-                        <span className="text-sm text-brand-textSecondary">
-                          {repeatType === 'daily' ? (repeatEvery === 1 ? 'day' : 'days') : (repeatEvery === 1 ? 'week' : 'weeks')}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1 flex-1 min-w-[120px]">
-                      <label className="text-xs font-bold text-brand-textSecondary uppercase tracking-wide">
-                        At time
-                      </label>
-                      <input
-                        type="time"
-                        value={repeatTime}
-                        onChange={e => setRepeatTime(e.target.value)}
-                        className="w-full rounded-lg border border-brand-border px-3 py-2 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-400"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Weekly day picker */}
-                  {repeatType === 'weekly' && (
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-brand-textSecondary uppercase tracking-wide">Run on</label>
-                      <div className="flex flex-wrap gap-2">
-                        {DAYS.map(d => (
-                          <button
-                            key={d}
-                            type="button"
-                            onClick={() => setRepeatDay(d)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                              repeatDay === d
-                                ? 'bg-violet-600 text-white border-violet-600'
-                                : 'bg-white text-brand-textPrimary border-brand-border hover:border-violet-300'
-                            }`}
-                          >
-                            {d.slice(0, 3)}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Ends */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-brand-textSecondary uppercase tracking-wide">Ends</label>
-                    <div className="flex gap-4 items-center flex-wrap">
-                      {['never','date'].map(opt => (
-                        <label key={opt} className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            checked={repeatUntilType === opt}
-                            onChange={() => setRepeatUntilType(opt)}
-                            className="accent-violet-600"
-                          />
-                          <span className="text-sm font-medium text-brand-textPrimary capitalize">
-                            {opt === 'never' ? 'Never' : 'On date'}
-                          </span>
-                        </label>
-                      ))}
-                      {repeatUntilType === 'date' && (
-                        <input
-                          type="date"
-                          value={repeatUntilDate}
-                          onChange={e => setRepeatUntilDate(e.target.value)}
-                          min={new Date().toISOString().slice(0, 10)}
-                          className="rounded-lg border border-brand-border px-3 py-2 text-sm outline-none focus:border-violet-400 focus:ring-1 focus:ring-violet-400"
-                        />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* First run preview */}
-                  <div className="bg-violet-50 border border-violet-100 rounded-lg px-4 py-3">
-                    <p className="text-xs text-violet-500 font-medium mb-1">First run</p>
-                    <input
-                      type="datetime-local"
-                      value={scheduledAt}
-                      onChange={e => setScheduledAt(e.target.value)}
-                      min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
-                      className="text-sm font-bold text-violet-800 bg-transparent border-none outline-none w-full"
-                    />
-                    <p className="text-[10px] text-violet-400 mt-1">Auto-computed from your settings. You can adjust manually.</p>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* ── Repeat scheduler ─────────────────────────────────────────── */}
+            <RepeatScheduler value={repeat} onChange={setRepeat} tzShort={tzShort} />
 
             {/* One-time schedule (shown only when repeat is OFF) */}
-            {!repeatEnabled && (
+            {!repeat.enabled && (
               <div className="space-y-2">
-                <label className="block text-sm font-bold text-brand-textPrimary">Scheduled At (Optional)</label>
+                <label className="block text-sm font-bold text-brand-textPrimary">
+                  Scheduled At (Optional)
+                  {tzShort && <span className="ml-2 text-xs font-normal text-brand-textMuted">— times in {tzShort}</span>}
+                </label>
                 <input
                   type="datetime-local"
                   name="scheduled_at"
-                  min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                  min={toLocalISO(new Date(Date.now() + 60000))}
                   className="block w-full rounded-lg border border-brand-border px-4 py-3 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue transition-all"
                 />
                 <p className="text-xs text-brand-textMuted">Leave empty to send immediately.</p>
@@ -488,7 +342,7 @@ const EmailJobs = () => {
 
             <div className="flex gap-4 pt-4">
               <Button type="submit" className="flex-1 py-3.5">
-                {repeatEnabled ? '↺ Create Recurring Job' : 'Create Job'}
+                {repeat.enabled ? '↺ Create Recurring Job' : 'Create Job'}
               </Button>
               <Button type="button" variant="outlined" onClick={handleBack} className="flex-1 py-3.5 bg-gray-200">
                 Cancel
@@ -500,6 +354,19 @@ const EmailJobs = () => {
     );
   }
 
+  // ── Tab filtering ─────────────────────────────────────────────────────────
+  const [tab, setTab] = useState('all');
+
+  const completedJobs = jobs.filter(j => j.status === 'Completed');
+  const pendingJobs   = jobs.filter(j => j.status !== 'Completed');
+  const visibleJobs   = tab === 'completed' ? completedJobs : tab === 'pending' ? pendingJobs : jobs;
+
+  const tabs = [
+    { key: 'all',       label: 'All Jobs',       count: jobs.length },
+    { key: 'pending',   label: 'Pending Jobs',   count: pendingJobs.length },
+    { key: 'completed', label: 'Completed Jobs',  count: completedJobs.length },
+  ];
+
   // ── List view ─────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
@@ -510,10 +377,7 @@ const EmailJobs = () => {
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button
-            onClick={() => {
-              setRecipient({ type: 'list', precinct_id: null, list_id: null, voter_id: null });
-              setView('add');
-            }}
+            onClick={() => { setRecipient({ type: 'list', precinct_id: null, list_id: null, voter_id: null }); setRepeat({ ...DEFAULT_REPEAT }); setView('add'); }}
             className="rounded-lg px-6 py-2.5 font-semibold"
           >
             + Create Job
@@ -521,11 +385,33 @@ const EmailJobs = () => {
         </div>
       </div>
 
+      {/* ── Tab bar ── */}
+      <div className="flex gap-1 border-b border-brand-border">
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px ${
+              tab === t.key
+                ? 'border-brand-blue text-brand-blue'
+                : 'border-transparent text-brand-textMuted hover:text-brand-textPrimary'
+            }`}
+          >
+            {t.label}
+            <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${
+              tab === t.key ? 'bg-blue-100 text-brand-blue' : 'bg-gray-100 text-gray-500'
+            }`}>
+              {t.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
       <DataTable
         columns={columns}
-        data={jobs}
+        data={visibleJobs}
         onDelete={handleDelete}
-        emptyMessage={loading ? 'Loading jobs…' : 'No email jobs found'}
+        emptyMessage={loading ? 'Loading jobs…' : `No ${tab === 'all' ? 'email' : tab} jobs found`}
       />
 
       {selectedJob && (

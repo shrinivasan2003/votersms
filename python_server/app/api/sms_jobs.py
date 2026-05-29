@@ -8,6 +8,7 @@ from app.dependencies.security import get_current_user
 from app.models import User as UserModel
 from app.utils.limits import check_limit
 from app.utils.audit import log_audit
+from app.utils.timezone import get_customer_timezone, naive_to_utc
 
 router = APIRouter()
 
@@ -82,13 +83,15 @@ def create_sms_job(
             ).fetchone().c
             check_limit(db, cid, "max_sms_jobs", current_count, "SMS Job")
 
-        # Reject past scheduled times
+        # Convert scheduled_at from customer's timezone to UTC, then validate
         scheduled_at_str = req.get('scheduled_at') or None
         if scheduled_at_str:
             try:
-                sched_dt = datetime.fromisoformat(scheduled_at_str.replace('Z', '+00:00'))
-                if sched_dt.tzinfo is None:
-                    sched_dt = sched_dt.replace(tzinfo=timezone.utc)
+                cust_tz = get_customer_timezone(db, cid)
+                scheduled_at_str = naive_to_utc(scheduled_at_str.replace('Z', ''), cust_tz)
+                # Normalise to plain "YYYY-MM-DDTHH:MM:SS" for MySQL DATETIME column
+                scheduled_at_str = scheduled_at_str[:19]
+                sched_dt = datetime.fromisoformat(scheduled_at_str).replace(tzinfo=timezone.utc)
                 if sched_dt <= datetime.now(timezone.utc):
                     raise HTTPException(status_code=400, detail="Scheduled time must be in the future.")
             except HTTPException:
@@ -104,21 +107,30 @@ def create_sms_job(
         result = db.execute(
             text("""
                 INSERT INTO sms_jobs
-                    (name, precinct_id, template_id, provider_id, scheduled_at, status, list_id, voter_id, customer_id, created_by)
+                    (name, precinct_id, template_id, provider_id, scheduled_at, status, list_id, voter_id, customer_id, created_by,
+                     repeat_type, repeat_every, repeat_days, repeat_time, repeat_until, repeat_dom, repeat_month)
                 VALUES
-                    (:name, :precinct_id, :template_id, :provider_id, :scheduled_at, :status, :list_id, :voter_id, :customer_id, :created_by)
+                    (:name, :precinct_id, :template_id, :provider_id, :scheduled_at, :status, :list_id, :voter_id, :customer_id, :created_by,
+                     :repeat_type, :repeat_every, :repeat_days, :repeat_time, :repeat_until, :repeat_dom, :repeat_month)
             """),
             {
-                "name":        req.get('name') or template_name,
-                "precinct_id": req.get('precinct_id') or None,
-                "template_id": req.get('template_id'),
-                "provider_id": req.get('provider_id') or None,
-                "scheduled_at": req.get('scheduled_at') or None,
-                "status": 'Pending',
-                "list_id":  req.get('list_id')  or None,
-                "voter_id": req.get('voter_id') or None,
-                "customer_id": getattr(current_user, 'customer_id', None),
-                "created_by":  getattr(current_user, 'id', None),
+                "name":         req.get('name') or template_name,
+                "precinct_id":  req.get('precinct_id') or None,
+                "template_id":  req.get('template_id'),
+                "provider_id":  req.get('provider_id') or None,
+                "scheduled_at": scheduled_at_str,
+                "status":       'Pending',
+                "list_id":      req.get('list_id')  or None,
+                "voter_id":     req.get('voter_id') or None,
+                "customer_id":  getattr(current_user, 'customer_id', None),
+                "created_by":   getattr(current_user, 'id', None),
+                "repeat_type":  req.get('repeat_type')  or None,
+                "repeat_every": req.get('repeat_every') or 1,
+                "repeat_days":  req.get('repeat_days')  or None,
+                "repeat_time":  req.get('repeat_time')  or None,
+                "repeat_until": req.get('repeat_until') or None,
+                "repeat_dom":   req.get('repeat_dom')   or None,
+                "repeat_month": req.get('repeat_month') or None,
             }
         )
         db.commit()

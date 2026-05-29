@@ -43,8 +43,19 @@ const EmailTemplates = () => {
         </span>
       )
     },
-    { 
-      header: 'STATUS', 
+    {
+      header: 'CC / BCC',
+      render: (row) => (
+        <div className="text-xs space-y-0.5">
+          {row.cc       && <div className="text-blue-600 truncate max-w-[140px]" title={row.cc}>CC: {row.cc}</div>}
+          {row.bcc      && <div className="text-gray-500 truncate max-w-[140px]" title={row.bcc}>BCC: {row.bcc}</div>}
+          {row.reply_to && <div className="text-green-600 truncate max-w-[140px]" title={row.reply_to}>Reply: {row.reply_to}</div>}
+          {!row.cc && !row.bcc && !row.reply_to && <span className="text-gray-300">—</span>}
+        </div>
+      )
+    },
+    {
+      header: 'STATUS',
       render: (row) => (
         <Badge variant={row.status === 'Active' ? 'success' : 'default'}>
           {row.status}
@@ -72,12 +83,15 @@ const EmailTemplates = () => {
     e.preventDefault();
     const formData = new FormData(e.target);
     const data = {
-      code: formData.get('code'),
-      name: formData.get('name'),
-      subject: formData.get('subject'),
-      body: formData.get('body'),
-      status: formData.get('active') === 'on' ? 'Active' : 'Inactive',
-      type: format
+      code:     formData.get('code'),
+      name:     formData.get('name'),
+      subject:  formData.get('subject'),
+      body:     formData.get('body'),
+      status:   formData.get('active') === 'on' ? 'Active' : 'Inactive',
+      type:     format,
+      cc:       formData.get('cc')       || null,
+      bcc:      formData.get('bcc')      || null,
+      reply_to: formData.get('reply_to') || null,
     };
 
     try {
@@ -153,16 +167,51 @@ const EmailTemplates = () => {
 
             <div className="space-y-2">
               <label className="block text-sm font-bold text-brand-textPrimary">Subject *</label>
-              <input 
+              <input
                 type="text"
                 name="subject"
                 placeholder="Email subject line"
-                defaultValue={editingRow?.subject || ''} 
+                defaultValue={editingRow?.subject || ''}
                 className="block w-full rounded-lg border border-brand-border px-4 py-3 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue transition-all"
-                required 
+                required
               />
             </div>
-            
+
+            {/* CC / BCC / Reply-To */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-brand-textPrimary">CC <span className="font-normal text-brand-textMuted">(optional)</span></label>
+                <input
+                  type="text"
+                  name="cc"
+                  placeholder="cc@example.com, cc2@example.com"
+                  defaultValue={editingRow?.cc || ''}
+                  className="block w-full rounded-lg border border-brand-border px-4 py-3 text-sm outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue transition-all"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-brand-textPrimary">BCC <span className="font-normal text-brand-textMuted">(optional)</span></label>
+                <input
+                  type="text"
+                  name="bcc"
+                  placeholder="bcc@example.com"
+                  defaultValue={editingRow?.bcc || ''}
+                  className="block w-full rounded-lg border border-brand-border px-4 py-3 text-sm outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue transition-all"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-brand-textPrimary">Reply-To <span className="font-normal text-brand-textMuted">(optional)</span></label>
+                <input
+                  type="email"
+                  name="reply_to"
+                  placeholder="reply@example.com"
+                  defaultValue={editingRow?.reply_to || ''}
+                  className="block w-full rounded-lg border border-brand-border px-4 py-3 text-sm outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue transition-all"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-brand-textMuted -mt-2">CC and BCC are applied to every email sent in a bulk job. Separate multiple addresses with commas.</p>
+
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <label className="block text-sm font-bold text-brand-textPrimary">Message Body *</label>

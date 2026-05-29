@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any
+from datetime import datetime, timezone
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
@@ -7,6 +8,7 @@ from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 from app.utils.limits import check_limit
 from app.utils.audit import log_audit
+from app.utils.timezone import get_customer_timezone, naive_to_utc
 
 router = APIRouter()
 
@@ -81,6 +83,21 @@ def create_whatsapp_job(
             ).fetchone().c
             check_limit(db, cid, "max_whatsapp_jobs", current_count, "WhatsApp Job")
 
+        # Convert scheduled_at from customer's timezone to UTC, then validate
+        scheduled_at_str = req.get('scheduled_at') or None
+        if scheduled_at_str:
+            try:
+                cust_tz = get_customer_timezone(db, current_user.customer_id)
+                scheduled_at_str = naive_to_utc(scheduled_at_str.replace('Z', ''), cust_tz)
+                scheduled_at_str = scheduled_at_str[:19]
+                sched_dt = datetime.fromisoformat(scheduled_at_str).replace(tzinfo=timezone.utc)
+                if sched_dt <= datetime.now(timezone.utc):
+                    raise HTTPException(status_code=400, detail="Scheduled time must be in the future.")
+            except HTTPException:
+                raise
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid scheduled_at format.")
+
         template_name = None
         if req.get('template_id'):
             t_row = db.execute(text("SELECT name FROM whatsapp_templates WHERE id=:id"), {"id": req['template_id']}).fetchone()
@@ -98,7 +115,7 @@ def create_whatsapp_job(
                 "precinct_id":  req.get('precinct_id') or None,
                 "template_id":  req.get('template_id'),
                 "provider_id":  req.get('provider_id') or None,
-                "scheduled_at": req.get('scheduled_at') or None,
+                "scheduled_at": scheduled_at_str,
                 "status":       'Pending',
                 "list_id":      req.get('list_id')  or None,
                 "voter_id":     req.get('voter_id') or None,

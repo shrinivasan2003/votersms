@@ -8,6 +8,7 @@ from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 from app.utils.limits import check_limit
 from app.utils.audit import log_audit
+from app.utils.timezone import get_customer_timezone, naive_to_utc
 
 router = APIRouter()
 
@@ -53,11 +54,13 @@ def create_email_template(
             check_limit(db, cid, "max_email_templates", current_count, "Email Template")
 
         result = db.execute(
-            text("INSERT INTO email_templates (code, name, subject, body, status, customer_id, created_by) "
-                 "VALUES (:code, :name, :subject, :body, :status, :customer_id, :created_by)"),
+            text("INSERT INTO email_templates "
+                 "(code, name, subject, body, status, customer_id, created_by, cc, bcc, reply_to) "
+                 "VALUES (:code, :name, :subject, :body, :status, :customer_id, :created_by, :cc, :bcc, :reply_to)"),
             {"code": req.get('code'), "name": req.get('name'), "subject": req.get('subject'),
              "body": req.get('body'), "status": req.get('status', 'Active'),
-             "customer_id": current_user.customer_id, "created_by": current_user.id},
+             "customer_id": current_user.customer_id, "created_by": current_user.id,
+             "cc": req.get('cc') or None, "bcc": req.get('bcc') or None, "reply_to": req.get('reply_to') or None},
         )
         db.commit()
         new_id = result.lastrowid
@@ -81,9 +84,10 @@ def update_email_template(
         old_row = db.execute(text(f"SELECT * FROM email_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id}).fetchone()
         old_vals = dict(old_row._mapping) if old_row else None
         db.execute(
-            text(f"UPDATE email_templates SET code=:code, name=:name, subject=:subject, body=:body, status=:status WHERE {where}"),
+            text(f"UPDATE email_templates SET code=:code, name=:name, subject=:subject, body=:body, status=:status, cc=:cc, bcc=:bcc, reply_to=:reply_to WHERE {where}"),
             {"code": req.get('code'), "name": req.get('name'), "subject": req.get('subject'),
-             "body": req.get('body'), "status": req.get('status'), "id": id, "cid": current_user.customer_id},
+             "body": req.get('body'), "status": req.get('status'), "id": id, "cid": current_user.customer_id,
+             "cc": req.get('cc') or None, "bcc": req.get('bcc') or None, "reply_to": req.get('reply_to') or None},
         )
         db.commit()
         cid = (old_vals or {}).get('customer_id') or current_user.customer_id
@@ -185,13 +189,15 @@ def create_email_job(
             ).fetchone().c
             check_limit(db, cid, "max_email_jobs", current_count, "Email Job")
 
-        # Reject past scheduled times
+        # Convert scheduled_at from customer's timezone to UTC, then validate
         scheduled_at_str = req.get('scheduled_at') or None
         if scheduled_at_str:
             try:
-                sched_dt = datetime.fromisoformat(scheduled_at_str.replace('Z', '+00:00'))
-                if sched_dt.tzinfo is None:
-                    sched_dt = sched_dt.replace(tzinfo=timezone.utc)
+                cust_tz = get_customer_timezone(db, current_user.customer_id)
+                scheduled_at_str = naive_to_utc(scheduled_at_str.replace('Z', ''), cust_tz)
+                # Normalise to plain "YYYY-MM-DDTHH:MM:SS" for MySQL DATETIME column
+                scheduled_at_str = scheduled_at_str[:19]
+                sched_dt = datetime.fromisoformat(scheduled_at_str).replace(tzinfo=timezone.utc)
                 if sched_dt <= datetime.now(timezone.utc):
                     raise HTTPException(status_code=400, detail="Scheduled time must be in the future.")
             except HTTPException:
@@ -209,18 +215,20 @@ def create_email_job(
                 INSERT INTO email_jobs
                     (name, precinct_id, template_id, provider_id, scheduled_at, status,
                      list_id, voter_id, customer_id, created_by,
-                     repeat_type, repeat_every, repeat_days, repeat_time, repeat_until)
+                     repeat_type, repeat_every, repeat_days, repeat_time, repeat_until,
+                     repeat_dom, repeat_month)
                 VALUES
                     (:name, :precinct_id, :template_id, :provider_id, :scheduled_at, :status,
                      :list_id, :voter_id, :customer_id, :created_by,
-                     :repeat_type, :repeat_every, :repeat_days, :repeat_time, :repeat_until)
+                     :repeat_type, :repeat_every, :repeat_days, :repeat_time, :repeat_until,
+                     :repeat_dom, :repeat_month)
             """),
             {
                 "name":         req.get('name') or template_name,
                 "precinct_id":  req.get('precinct_id') or None,
                 "template_id":  req.get('template_id'),
                 "provider_id":  req.get('provider_id') or None,
-                "scheduled_at": req.get('scheduled_at') or None,
+                "scheduled_at": scheduled_at_str,
                 "status":       'Pending',
                 "list_id":      req.get('list_id')  or None,
                 "voter_id":     req.get('voter_id') or None,
@@ -231,6 +239,8 @@ def create_email_job(
                 "repeat_days":  req.get('repeat_days')  or None,
                 "repeat_time":  req.get('repeat_time')  or None,
                 "repeat_until": req.get('repeat_until') or None,
+                "repeat_dom":   req.get('repeat_dom')   or None,
+                "repeat_month": req.get('repeat_month') or None,
             },
         )
         db.commit()
