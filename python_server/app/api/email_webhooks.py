@@ -34,6 +34,13 @@ def _get_session():
         db.close()
 
 
+def _norm_dt(val):
+    """Normalize ISO datetime from Postmark to MySQL-safe 'YYYY-MM-DD HH:MM:SS'."""
+    if not val:
+        return None
+    return val.replace("Z", "").replace("T", " ")[:19]
+
+
 def _resolve_job_id(db: Session, message_id: str):
     """Look up our internal job_id from the Postmark MessageID."""
     if not message_id:
@@ -138,7 +145,7 @@ def _handle_delivery(payload: dict, db: Session):
     params.update(
         event_type="delivery",
         recipient=payload.get("Recipient") or payload.get("Email") or "",
-        occurred_at=payload.get("DeliveredAt") or payload.get("ReceivedAt"),
+        occurred_at=_norm_dt(payload.get("DeliveredAt") or payload.get("ReceivedAt")),
     )
     _insert_event(db, params)
 
@@ -150,7 +157,7 @@ def _handle_open(payload: dict, db: Session):
     params.update(
         event_type="open",
         recipient=payload.get("Recipient") or "",
-        occurred_at=payload.get("ReceivedAt"),
+        occurred_at=_norm_dt(payload.get("ReceivedAt")),
         is_first=1 if payload.get("FirstOpen") else 0,
         platform=payload.get("Platform"),
         client_name=client.get("Name"),
@@ -167,7 +174,7 @@ def _handle_click(payload: dict, db: Session):
     params.update(
         event_type="click",
         recipient=payload.get("Recipient") or "",
-        occurred_at=payload.get("ReceivedAt"),
+        occurred_at=_norm_dt(payload.get("ReceivedAt")),
         is_first=1 if payload.get("FirstClick") else 0,
         click_url=payload.get("OriginalLink"),
         platform=payload.get("Platform"),
@@ -183,7 +190,7 @@ def _handle_bounce(payload: dict, db: Session):
         event_type="bounce",
         # Bounce events use Email, not Recipient
         recipient=payload.get("Email") or payload.get("Recipient") or "",
-        occurred_at=payload.get("BouncedAt") or payload.get("ReceivedAt"),
+        occurred_at=_norm_dt(payload.get("BouncedAt") or payload.get("ReceivedAt")),
         bounce_type=str(payload.get("Type", ""))[:60] if payload.get("Type") is not None else None,
         bounce_description=payload.get("Description"),
     )
@@ -196,7 +203,7 @@ def _handle_spam(payload: dict, db: Session):
         event_type="spam",
         # SpamComplaint also uses Email
         recipient=payload.get("Email") or payload.get("Recipient") or "",
-        occurred_at=payload.get("BouncedAt") or payload.get("ReceivedAt"),
+        occurred_at=_norm_dt(payload.get("BouncedAt") or payload.get("ReceivedAt")),
         bounce_type=str(payload.get("Type", ""))[:60] if payload.get("Type") is not None else None,
     )
     _insert_event(db, params)
@@ -207,7 +214,7 @@ def _handle_subscription_change(payload: dict, db: Session):
     params.update(
         event_type="unsubscribe",
         recipient=payload.get("Recipient") or payload.get("Email") or "",
-        occurred_at=payload.get("ChangedAt") or payload.get("ReceivedAt"),
+        occurred_at=_norm_dt(payload.get("ChangedAt") or payload.get("ReceivedAt")),
     )
     _insert_event(db, params)
 
@@ -223,7 +230,7 @@ def _handle_unknown(payload: dict, db: Session):
             or payload.get("Email")
             or ""
         ),
-        occurred_at=(
+        occurred_at=_norm_dt(
             payload.get("ReceivedAt")
             or payload.get("DeliveredAt")
             or payload.get("BouncedAt")
