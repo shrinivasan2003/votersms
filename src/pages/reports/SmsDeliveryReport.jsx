@@ -154,7 +154,7 @@ const SmsDeliveryReport = () => {
 
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 no-print">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">SMS Delivery Report</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">SMS Analytics</h1>
           <p className="text-sm text-brand-textMuted mt-1">View SMS job delivery statistics and recipient details</p>
         </div>
         <button
@@ -167,7 +167,7 @@ const SmsDeliveryReport = () => {
       </div>
 
       <div className="hidden print:block mb-6">
-        <h1 className="text-2xl font-bold text-brand-navy">SMS Delivery Report</h1>
+        <h1 className="text-2xl font-bold text-brand-navy">SMS Analytics</h1>
         <p className="text-sm text-brand-textMuted">View SMS job delivery statistics and recipient details</p>
       </div>
 

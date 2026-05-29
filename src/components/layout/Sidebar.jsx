@@ -161,7 +161,7 @@ const Sidebar = ({ isCollapsed, onItemClick, onExpand }) => {
             onToggle={() => handleToggle('Reports')}
             onExpand={onExpand}
           >
-            <NavItem to="/sms-delivery-report"   icon={FileText} label="SMS Delivery Report" isCollapsed={isCollapsed} onItemClick={onItemClick} />
+            <NavItem to="/sms-delivery-report"   icon={FileText} label="SMS Analytics" isCollapsed={isCollapsed} onItemClick={onItemClick} />
             <NavItem to="/email-delivery-report" icon={Mail}     label="Email Analytics"     isCollapsed={isCollapsed} onItemClick={onItemClick} />
           </NavGroup>
 

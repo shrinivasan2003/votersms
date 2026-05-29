@@ -50,11 +50,19 @@ class ResetPasswordRequest(BaseModel):
 @router.post("/login")
 @limiter.limit("10/minute")
 def login(request: Request, body: LoginRequest, db: Session = Depends(get_db)):
-    # Allow login by username OR email
+    # Allow login by username OR email.
+    # MySQL's default collation is case-insensitive, so we fetch first then
+    # enforce case-sensitivity in Python for username (emails are case-insensitive by RFC).
     user = db.query(UserModel).filter(
         or_(UserModel.username == body.username, UserModel.email == body.username)
     ).first()
     if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Reject if neither username (case-sensitive) nor email (case-insensitive) truly matches
+    username_match = (user.username == body.username)
+    email_match    = bool(user.email and user.email.lower() == body.username.lower())
+    if not username_match and not email_match:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
     # Password verification — hashed only; plaintext passwords are not accepted
