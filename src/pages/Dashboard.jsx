@@ -275,8 +275,8 @@ const Dashboard = () => {
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full min-w-[600px] divide-y divide-brand-border">
+        <div className="overflow-x-auto -mx-6 px-6">
+          <table className="w-full min-w-[640px] divide-y divide-brand-border">
             <thead className="bg-gray-50">
               <tr>
                 {['JOB ID', 'TYPE', 'STATUS', 'TEMPLATE', 'RECIPIENTS', 'SUCCESS/FAILED', 'CREATED AT'].map((head) => (

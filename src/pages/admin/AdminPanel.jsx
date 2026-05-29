@@ -5,7 +5,7 @@ import {
   Building2, Mail, UserPlus, Activity, Trash2, PowerOff,
   CheckCircle, XCircle, Power, Settings, Send, PauseCircle,
   LogOut, ChevronRight, Users, BarChart3, Database, SlidersHorizontal, X,
-  ClipboardList,
+  ClipboardList, Menu,
 } from 'lucide-react';
 import AuditLog from './AuditLog';
 import { useAuth } from '../../contexts/AuthContext';
@@ -661,6 +661,7 @@ const AdminPanel = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState('create');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const isAdmin = user?.role?.toLowerCase() === 'admin' && !user?.customer_id;
 
@@ -692,7 +693,9 @@ const AdminPanel = () => {
           </div>
 
           <div className="relative z-10 flex-1 flex flex-col justify-center">
-            <img src={bdaLogo} alt="BallotDA" className="h-12 w-auto object-contain mb-8 self-start" />
+            <Link to="/" className="flex items-center bg-white w-fit p-3 rounded-2xl shadow-sm mb-8 self-start hover:opacity-80 transition-opacity">
+              <img src={bdaLogo} alt="BallotDA" className="h-8 md:h-10 w-auto object-contain" />
+            </Link>
 
             <h1 className="text-4xl font-extrabold text-white mb-3 leading-tight">
               Platform<br />
@@ -729,11 +732,11 @@ const AdminPanel = () => {
         {/* Right panel */}
         <div className="flex-1 bg-[#F8FAFC] flex flex-col">
           <div className="px-8 py-4 flex items-center justify-between border-b border-gray-100 bg-white">
-            <img src={bdaLogo} alt="BallotDA" className="h-8 w-auto object-contain lg:hidden" />
+            <Link to="/"><img src={bdaLogo} alt="BallotDA" className="h-8 w-auto object-contain lg:hidden hover:opacity-80 transition-opacity" /></Link>
             <div className="hidden lg:block" />
             <Link to="/login"
-              className="text-sm text-gray-500 hover:text-[#001F3F] font-semibold flex items-center gap-1.5 transition-colors">
-              Customer Login <ChevronRight size={14} />
+              className="text-sm text-gray-500 hover:text-[#001F3F] font-semibold transition-colors">
+              Customer Login
             </Link>
           </div>
 
@@ -748,10 +751,18 @@ const AdminPanel = () => {
   // ── Authenticated state ──────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col">
-      {/* Header */}
-      <nav className="w-full bg-white border-b border-gray-100 px-6 lg:px-8 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-sm">
-        <div className="flex items-center gap-4">
-          <img src={bdaLogo} alt="BallotDA" className="h-9 w-auto object-contain" />
+
+      {/* ── Top Header ── */}
+      <nav className="w-full bg-white border-b border-gray-100 px-4 lg:px-8 py-3.5 flex items-center justify-between sticky top-0 z-30 shadow-sm">
+        <div className="flex items-center gap-3">
+          {/* Hamburger — mobile only */}
+          <button
+            onClick={() => setSidebarOpen(v => !v)}
+            className="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+          >
+            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+          <img src={bdaLogo} alt="BallotDA" className="h-8 lg:h-9 w-auto object-contain" />
           <div className="hidden sm:flex items-center gap-2">
             <div className="w-px h-5 bg-gray-200" />
             <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
@@ -760,7 +771,7 @@ const AdminPanel = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <div className="hidden sm:flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
             <div className="w-6 h-6 bg-[#001F3F] rounded-lg flex items-center justify-center">
               <ShieldCheck size={13} className="text-blue-300" />
@@ -779,31 +790,75 @@ const AdminPanel = () => {
         </div>
       </nav>
 
-      {/* Tabs */}
-      <div className="bg-white border-b border-gray-100 px-6 lg:px-8">
-        <div className="flex gap-1 max-w-5xl mx-auto">
-          {tabs.map(({ key, label, Icon }) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`flex items-center gap-2 px-5 py-4 text-sm font-bold border-b-2 transition-all
-                ${tab === key
-                  ? 'border-[#001F3F] text-[#001F3F]'
-                  : 'border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200'}`}
-            >
-              <Icon size={15} />
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <div className="flex flex-1 relative">
 
-      {/* Page content */}
-      <div className="flex-1 px-6 lg:px-8 py-8 max-w-5xl mx-auto w-full">
-        {tab === 'create'   && <CreateCustomerTab />}
-        {tab === 'monitor'  && <MonitorAccountsTab />}
-        {tab === 'audit'    && <AuditLog />}
-        {tab === 'settings' && <MasterSettingsTab />}
+        {/* ── Sidebar backdrop (mobile) ── */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/30 z-20 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {/* ── Left Sidebar — mobile only ── */}
+        <aside className={`
+          fixed top-[61px] left-0 bottom-0 w-64 bg-white border-r border-gray-100 z-20
+          flex flex-col shadow-sm transition-transform duration-300 ease-in-out lg:hidden
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}>
+          {/* Nav items */}
+          <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+            {tabs.map(({ key, label, Icon }) => (
+              <button
+                key={key}
+                onClick={() => { setTab(key); setSidebarOpen(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-left ${
+                  tab === key
+                    ? 'bg-[#001F3F] text-white shadow-md shadow-[#001F3F]/20'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-[#001F3F]'
+                }`}
+              >
+                <Icon size={17} className="shrink-0" />
+                {label}
+              </button>
+            ))}
+          </nav>
+          <div className="p-4 border-t border-gray-100">
+            <p className="text-xs text-gray-400 text-center">© 2026 BallotDA Enterprise</p>
+          </div>
+        </aside>
+
+        {/* ── Main content ── */}
+        <main className="flex-1 min-w-0 overflow-x-hidden flex flex-col">
+
+          {/* Horizontal tabs — desktop only ── */}
+          <div className="hidden lg:block bg-white border-b border-gray-100 px-6 lg:px-8">
+            <div className="flex gap-1 max-w-5xl mx-auto">
+              {tabs.map(({ key, label, Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  className={`flex items-center gap-2 px-5 py-4 text-sm font-bold border-b-2 transition-all ${
+                    tab === key
+                      ? 'border-[#001F3F] text-[#001F3F]'
+                      : 'border-transparent text-gray-400 hover:text-gray-600 hover:border-gray-200'
+                  }`}
+                >
+                  <Icon size={15} />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-5xl mx-auto w-full">
+            {tab === 'create'   && <CreateCustomerTab />}
+            {tab === 'monitor'  && <MonitorAccountsTab />}
+            {tab === 'audit'    && <AuditLog />}
+            {tab === 'settings' && <MasterSettingsTab />}
+          </div>
+        </main>
+
       </div>
     </div>
   );

@@ -91,7 +91,9 @@ const Sidebar = ({ isCollapsed, onItemClick, onExpand }) => {
 
       <aside
         className={`fixed top-16 left-0 bottom-0 bg-white border-r border-brand-border z-20 flex flex-col overflow-y-auto overflow-x-hidden shadow-sm transition-all duration-300 ease-in-out ${
-          isCollapsed ? 'w-[60px]' : 'w-[220px]'
+          isCollapsed
+            ? 'w-[60px] -translate-x-full sm:translate-x-0'   /* hidden off-screen on mobile, icon bar on sm+ */
+            : 'w-[220px] translate-x-0'                        /* drawer overlay on mobile, full sidebar on sm+ */
         }`}
       >
         <nav className="flex-1 py-4">

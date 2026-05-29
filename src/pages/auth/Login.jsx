@@ -35,24 +35,25 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#F8FAFC]">
-      {/* Left Side: Branding & Features */}
-      <div className="md:w-1/2 bg-[#001F3F] relative overflow-hidden flex flex-col p-8 lg:p-12 text-white">
+      {/* Left Side: Branding & Features — compact on mobile, full on md+ */}
+      <div className="md:w-1/2 bg-[#001F3F] relative overflow-hidden flex flex-col p-6 md:p-8 lg:p-12 text-white">
         <div className="absolute inset-0 opacity-10 pointer-events-none" style={{
           backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)',
           backgroundSize: '40px 40px'
         }} />
 
         <div className="relative z-10 flex-1 flex flex-col justify-center">
-          <div className="flex items-center space-x-3 bg-white w-fit p-3 rounded-2xl shadow-sm mb-8">
-            <img src={bdaLogo} alt="BallotDA" className="h-10 w-auto object-contain" />
-          </div>
+          <Link to="/" className="flex items-center space-x-3 bg-white w-fit p-3 rounded-2xl shadow-sm mb-6 md:mb-8 hover:opacity-80 transition-opacity">
+            <img src={bdaLogo} alt="BallotDA" className="h-8 md:h-10 w-auto object-contain" />
+          </Link>
 
-          <h1 className="text-4xl lg:text-5xl font-bold mb-4 tracking-tight leading-tight">
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-2 md:mb-4 tracking-tight leading-tight">
             Outreach <br />
             <span className="text-blue-400">Platform</span>
           </h1>
 
-          <div className="space-y-6 mt-8 max-w-md">
+          {/* Features list — hidden on mobile to keep the login form in view */}
+          <div className="space-y-5 mt-6 max-w-md hidden md:block">
             {[
               { Icon: Shield, title: 'Enterprise Security', desc: 'Bank-level encryption and security protocols for sensitive voter data.' },
               { Icon: BarChart3, title: 'Real-time Analytics', desc: 'Monitor campaigns and track performance metrics as they happen.' },
@@ -71,17 +72,17 @@ const Login = () => {
           </div>
         </div>
 
-        <div className="mt-auto relative z-10 pt-8">
+        <div className="mt-auto relative z-10 pt-4 md:pt-8 hidden md:block">
           <div className="w-full h-px bg-white/10 mb-4" />
           <p className="text-sm text-gray-400 font-medium">Trusted by election administrators nationwide</p>
         </div>
       </div>
 
       {/* Right Side: Login Form */}
-      <div className="md:w-1/2 flex items-center justify-center p-6 lg:p-8 relative">
+      <div className="md:w-1/2 flex flex-col items-center justify-center p-6 lg:p-8 gap-3">
 
-        {/* Admin Login — small, top-right corner */}
-        <div className="absolute top-4 right-4">
+        {/* Admin Login — inline above form, right-aligned (no absolute positioning) */}
+        <div className="w-full max-w-[500px] flex justify-end">
           <Link
             to="/admin"
             className="text-xs text-gray-400 hover:text-[#001F3F] font-semibold border border-gray-200 hover:border-gray-400 px-3 py-1.5 rounded-lg transition-all"

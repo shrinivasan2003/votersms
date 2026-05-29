@@ -2,6 +2,27 @@ import { useState, useEffect } from 'react';
 import { Play, RefreshCw, Info, Loader2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
+// Parse a UTC datetime string from DB (may lack 'Z') as a proper UTC Date
+const parseUTC = (str) => {
+  if (!str) return null;
+  const s = str.includes('Z') || str.includes('+') ? str : str + 'Z';
+  return new Date(s);
+};
+
+// Display a UTC datetime string in the given IANA timezone
+const toLocalDisplay = (utcStr, ianaT) => {
+  const d = parseUTC(utcStr);
+  if (!d) return null;
+  try {
+    return d.toLocaleString('en-US', {
+      timeZone: ianaT, month: 'short', day: 'numeric',
+      year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+};
+
 const ProcessJobs = () => {
   const { getAuthHeaders } = useAuth();
   const [jobId, setJobId] = useState('');
@@ -11,6 +32,21 @@ const ProcessJobs = () => {
   const [message, setMessage] = useState('');
   const [pendingJobs, setPendingJobs] = useState([]);
   const [jobsLoading, setJobsLoading] = useState(false);
+  const [customerTz, setCustomerTz] = useState('UTC');
+  const [tzShort, setTzShort] = useState('UTC');
+
+  // Fetch customer timezone once on mount
+  useEffect(() => {
+    fetch('/api/customers/my-settings')
+      .then(r => r.json())
+      .then(d => {
+        if (d?.timezone) {
+          setCustomerTz(d.timezone);
+          setTzShort(d.timezone_short?.[d.timezone] || d.timezone);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const fetchPendingJobs = async (type = jobType) => {
     setJobsLoading(true);
@@ -200,12 +236,16 @@ const ProcessJobs = () => {
                           {job.template_name || '—'}
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap">
-                          {job.scheduled_at
-                            ? <span className="text-amber-600 font-medium">
-                                {new Date(job.scheduled_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            : <span className="text-gray-400 italic text-xs">Immediate</span>
-                          }
+                          {job.scheduled_at ? (
+                            <span className="text-amber-600 font-medium">
+                              {toLocalDisplay(job.scheduled_at, customerTz)}
+                              {tzShort && (
+                                <span className="ml-1 text-[10px] text-gray-400 font-normal">({tzShort})</span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 italic text-xs">Immediate</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="px-3 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-700">
@@ -222,37 +262,19 @@ const ProcessJobs = () => {
         </div>
       </div>
 
-      <div className="bg-[#f0f7ff] rounded-xl shadow-sm border border-[#d1e9ff] overflow-hidden">
-        <div className="bg-[#f0f7ff] border-b border-[#d1e9ff] px-6 py-4 flex items-center gap-3">
-          <Info size={20} className="text-brand-blue" />
-          <h3 className="font-bold text-brand-blue text-lg">Automatic Processing Setup</h3>
-        </div>
-        <div className="p-4 sm:p-8 space-y-8">
-          <div className="space-y-4">
-            <h4 className="font-bold text-brand-textPrimary text-lg">Automatic Scheduling</h4>
-            <p className="text-sm text-brand-textSecondary">
-              The backend runs a scheduler loop every <strong>60 seconds</strong>. It automatically detects
-              any Pending job whose scheduled time has arrived and processes it — no manual action needed.
-            </p>
-            <div className="bg-[#f8f9fa] border border-gray-200 rounded-lg p-5 text-sm text-brand-textPrimary space-y-1">
-              <p>• <strong>No scheduled time set</strong> → job starts processing immediately when created.</p>
-              <p>• <strong>Future scheduled time</strong> → job waits; scheduler picks it up when the time arrives.</p>
-              <p>• <strong>This page</strong> → use only to manually force-trigger a specific job ID.</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <h4 className="font-bold text-brand-textPrimary text-lg">API Endpoint</h4>
-            <p className="text-sm text-brand-textSecondary">You can also trigger processing via API:</p>
-            <div className="bg-[#f8f9fa] border border-gray-200 rounded-lg p-5 font-mono text-sm text-brand-textPrimary">
-              <p className="mb-2">POST /api/process-jobs/process</p>
-              <p>{"{"}</p>
-              <p className="pl-4">"job_id": 123, // Required: specific job ID</p>
-              <p className="pl-4">"batch_size": 100, // Optional: batch size (default: 100)</p>
-              <p className="pl-4">"job_type": "sms" // Optional: "sms" or "email"</p>
-              <p>{"}"}</p>
-            </div>
-          </div>
+      <div className="bg-[#f0f7ff] rounded-xl border border-[#d1e9ff] p-5 flex gap-4">
+        <Info size={18} className="text-brand-blue shrink-0 mt-0.5" />
+        <div className="space-y-1.5 text-sm">
+          <p className="font-bold text-brand-blue">How job processing works</p>
+          <p className="text-brand-textSecondary">
+            <strong className="text-brand-textPrimary">Immediate jobs</strong> — created without a scheduled time — are picked up and processed automatically within seconds.
+          </p>
+          <p className="text-brand-textSecondary">
+            <strong className="text-brand-textPrimary">Scheduled jobs</strong> — created with a future date/time — are held until that time arrives, then processed automatically.
+          </p>
+          <p className="text-brand-textSecondary">
+            <strong className="text-brand-textPrimary">This page</strong> — use it to manually force-trigger a specific pending job by entering its Job ID above.
+          </p>
         </div>
       </div>
     </div>
