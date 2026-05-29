@@ -313,7 +313,7 @@ const LandingPage = () => (
     <section id="why-ballotda" className="scroll-mt-16 py-12 sm:py-16 px-4 sm:px-6 bg-gray-50 border-y border-gray-100">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-8 sm:mb-10">
-          <span className="inline-block text-xs font-bold uppercase tracking-widest text-[#001F3F] bg-[#001F3F]/8 border border-[#001F3F]/15 px-3 py-1 rounded-full mb-3">
+          <span className="inline-block text-xs font-bold uppercase tracking-widest text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1 rounded-full mb-3">
             Why BallotDA
           </span>
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#001F3F] mb-2 sm:mb-3">
