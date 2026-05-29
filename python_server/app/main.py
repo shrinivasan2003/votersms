@@ -36,6 +36,7 @@ from app.api import (
     email_inbound,
     email_analytics,
     contact_lists,
+    list_meta_tags,
     customers,
     customer_limits,
     audit_log,
@@ -105,7 +106,8 @@ async def _scheduler_loop() -> None:
                     rows = db.execute(text(
                         f"SELECT id FROM {table} "
                         f"WHERE status = 'Pending' "
-                        f"  AND (scheduled_at IS NULL OR scheduled_at <= NOW())"
+                        f"  AND scheduled_at IS NOT NULL "
+                        f"  AND scheduled_at <= NOW()"
                     )).fetchall()
                     for (job_id,) in rows:
                         _sched_log.info("Scheduler: dispatching %s #%s", table, job_id)
@@ -200,6 +202,7 @@ app.include_router(sms_delivery_stats.router, prefix="/api", dependencies=_prote
 app.include_router(process_jobs.router,       prefix="/api", dependencies=_protected)
 app.include_router(email_analytics.router,    prefix="/api", dependencies=_protected)
 app.include_router(contact_lists.router,      prefix="/api", dependencies=_protected)
+app.include_router(list_meta_tags.router,     prefix="/api", dependencies=_protected)
 app.include_router(customers.router,          prefix="/api", dependencies=_protected)
 app.include_router(customer_limits.router,    prefix="/api", dependencies=_protected)
 app.include_router(audit_log.router,          prefix="/api", dependencies=_protected)

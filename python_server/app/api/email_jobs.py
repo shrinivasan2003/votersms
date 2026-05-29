@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy import text
@@ -7,7 +7,6 @@ from app.database import SessionLocal
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 from app.utils.limits import check_limit
-from app.services.message_processor import process_email_job
 from app.utils.audit import log_audit
 
 router = APIRouter()
@@ -104,11 +103,17 @@ def delete_email_template(
         where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
         old_row = db.execute(text(f"SELECT * FROM email_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id}).fetchone()
         old_vals = dict(old_row._mapping) if old_row else None
+
+        # Detach any jobs that reference this template before deleting
+        db.execute(text("UPDATE email_jobs SET template_id=NULL WHERE template_id=:id"), {"id": id})
+
         db.execute(text(f"DELETE FROM email_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id})
         db.commit()
         cid = (old_vals or {}).get('customer_id') or current_user.customer_id
         log_audit(db, cid, 'email_template', id, (old_vals or {}).get('name'), 'DELETE', current_user, old_values=old_vals)
         return {"message": "Deleted successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -168,7 +173,6 @@ def get_email_jobs(
 @router.post("/email-jobs")
 def create_email_job(
     req: Dict[str, Any] = Body(...),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(_get_session),
     current_user: UserOut = Depends(get_current_user),
 ):
@@ -203,9 +207,13 @@ def create_email_job(
         result = db.execute(
             text("""
                 INSERT INTO email_jobs
-                    (name, precinct_id, template_id, provider_id, scheduled_at, status, list_id, voter_id, customer_id, created_by)
+                    (name, precinct_id, template_id, provider_id, scheduled_at, status,
+                     list_id, voter_id, customer_id, created_by,
+                     repeat_type, repeat_every, repeat_days, repeat_time, repeat_until)
                 VALUES
-                    (:name, :precinct_id, :template_id, :provider_id, :scheduled_at, :status, :list_id, :voter_id, :customer_id, :created_by)
+                    (:name, :precinct_id, :template_id, :provider_id, :scheduled_at, :status,
+                     :list_id, :voter_id, :customer_id, :created_by,
+                     :repeat_type, :repeat_every, :repeat_days, :repeat_time, :repeat_until)
             """),
             {
                 "name":         req.get('name') or template_name,
@@ -218,16 +226,17 @@ def create_email_job(
                 "voter_id":     req.get('voter_id') or None,
                 "customer_id":  current_user.customer_id,
                 "created_by":   current_user.id,
+                "repeat_type":  req.get('repeat_type')  or None,
+                "repeat_every": req.get('repeat_every') or 1,
+                "repeat_days":  req.get('repeat_days')  or None,
+                "repeat_time":  req.get('repeat_time')  or None,
+                "repeat_until": req.get('repeat_until') or None,
             },
         )
         db.commit()
         job_id = result.lastrowid
         log_audit(db, current_user.customer_id, 'email_job', job_id,
                   req.get('name') or template_name, 'CREATE', current_user, new_values=req)
-
-        scheduled_at_str = req.get('scheduled_at') or None
-        if not scheduled_at_str:
-            background_tasks.add_task(process_email_job, job_id)
 
         return {"id": job_id, **req}
     except HTTPException:

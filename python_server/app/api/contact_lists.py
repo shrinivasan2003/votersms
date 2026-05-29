@@ -265,14 +265,20 @@ def bulk_add_list_members(
 ):
     cid = current_user.customer_id
     added = 0
+    updated = 0
     skipped = 0
     try:
+        # Fetch custom meta tag keys for this list once
+        custom_keys = {r.tag_key for r in db.execute(
+            text("SELECT tag_key FROM list_meta_tags WHERE list_id=:lid"),
+            {"lid": list_id},
+        ).fetchall()}
+
         for item in req:
             voter_id = item.get("voter_id")
             email = item.get("email", "").strip()
 
             if not voter_id and email:
-                # Only find voters that belong to this customer
                 cid_clause = "AND customer_id=:cid" if cid is not None else ""
                 row = db.execute(
                     text(f"SELECT id FROM voters WHERE LOWER(email)=LOWER(:email) {cid_clause} LIMIT 1"),
@@ -282,16 +288,30 @@ def bulk_add_list_members(
                     voter_id = row[0]
 
             if voter_id:
-                db.execute(
+                result = db.execute(
                     text("INSERT IGNORE INTO list_members (list_id, voter_id) VALUES (:list_id, :voter_id)"),
                     {"list_id": list_id, "voter_id": voter_id}
                 )
-                added += 1
+                # rowcount=1 means truly new, 0 means already in list
+                if result.rowcount > 0:
+                    added += 1
+                else:
+                    updated += 1
+
+                # Save any custom meta values provided in this row
+                for key in custom_keys:
+                    if key in item:
+                        val = str(item.get(key) or "").strip()
+                        db.execute(text("""
+                            INSERT INTO list_member_meta_values (list_id, voter_id, tag_key, tag_value)
+                            VALUES (:lid, :vid, :key, :val)
+                            ON DUPLICATE KEY UPDATE tag_value=:val
+                        """), {"lid": list_id, "vid": voter_id, "key": key, "val": val})
             else:
                 skipped += 1
 
         db.commit()
-        return {"added": added, "skipped": skipped}
+        return {"added": added, "updated": updated, "skipped": skipped}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import List, Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy import text
@@ -7,7 +7,6 @@ from app.database import SessionLocal
 from app.dependencies.security import get_current_user
 from app.models import User as UserModel
 from app.utils.limits import check_limit
-from app.services.message_processor import process_sms_job
 from app.utils.audit import log_audit
 
 router = APIRouter()
@@ -71,7 +70,6 @@ def get_sms_jobs(
 @router.post("/sms-jobs")
 def create_sms_job(
     req: Dict[str, Any] = Body(...),
-    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(_get_session),
     current_user = Depends(get_current_user),
 ):
@@ -127,12 +125,6 @@ def create_sms_job(
         job_id = result.lastrowid
         log_audit(db, getattr(current_user, 'customer_id', None), 'sms_job', job_id,
                   req.get('name') or template_name, 'CREATE', current_user, new_values=req)
-
-        scheduled_at_str = req.get('scheduled_at') or None
-        if not scheduled_at_str:
-            # No schedule → send immediately
-            background_tasks.add_task(process_sms_job, job_id)
-        # else: future schedule → scheduler loop will dispatch at the right time
 
         return {"id": job_id, **req}
     except HTTPException:

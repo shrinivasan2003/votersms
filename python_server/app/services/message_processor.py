@@ -7,7 +7,7 @@ from twilio.rest import Client
 import httpx
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,100 @@ def _normalize_phone(raw: str) -> str:
     return f"+{stripped}"
 
 
-# ── Shared helper: resolve recipient list ─────────────────────────────────────
+# ── Shared helpers ────────────────────────────────────────────────────────────
+
+def _fetch_meta_values(db, list_id) -> dict:
+    """Returns {voter_id: {tag_key: tag_value}} for all members of a contact list."""
+    if not list_id:
+        return {}
+    rows = db.execute(text("""
+        SELECT voter_id, tag_key, tag_value
+        FROM list_member_meta_values
+        WHERE list_id = :lid
+    """), {"lid": list_id}).fetchall()
+    result = {}
+    for r in rows:
+        result.setdefault(r.voter_id, {})[r.tag_key] = r.tag_value or ""
+    return result
+
+
+def _substitute(body: str, voter: dict, meta: dict) -> str:
+    """Replace all {{placeholders}} in body with voter data + custom meta values."""
+    first = voter.get("first_name") or ""
+    last  = voter.get("last_name")  or ""
+    full  = f"{first} {last}".strip()
+    body = (
+        body
+        .replace("{{FirstName}}", first)
+        .replace("{{LastName}}",  last)
+        .replace("{{FullName}}",  full)
+        .replace("{{first_name}}", first)
+        .replace("{{last_name}}",  last)
+        .replace("{{full_name}}",  full)
+        .replace("{{email}}", voter.get("email") or "")
+        .replace("{{phone}}", voter.get("phone") or "")
+    )
+    for tag_key, tag_value in meta.items():
+        body = body.replace(f"{{{{{tag_key}}}}}", tag_value)
+    return body
+
+
+def _calc_next_run(job):
+    """Calculate the next scheduled_at for a recurring job based on the previous run time."""
+    if not getattr(job, 'repeat_type', None):
+        return None
+    base  = job.scheduled_at or datetime.utcnow()
+    every = int(getattr(job, 'repeat_every', None) or 1)
+    rtype = job.repeat_type
+    if rtype == 'daily':
+        next_dt = base + timedelta(days=every)
+    elif rtype == 'weekly':
+        next_dt = base + timedelta(weeks=every)
+    else:
+        return None
+    until = getattr(job, 'repeat_until', None)
+    if until and next_dt.date() > until:
+        return None
+    return next_dt
+
+
+def _spawn_next_email_job(db, job):
+    """Create the next pending occurrence of a recurring email job."""
+    next_run = _calc_next_run(job)
+    if not next_run:
+        logger.info(f"Email Job {job.id}: repeat cycle ended (past repeat_until or unknown type)")
+        return
+    # Always point back to the very first job in the chain
+    original_parent = getattr(job, 'parent_job_id', None) or job.id
+    db.execute(text("""
+        INSERT INTO email_jobs
+            (name, precinct_id, template_id, provider_id, list_id, voter_id,
+             scheduled_at, status, customer_id, created_by,
+             repeat_type, repeat_every, repeat_days, repeat_time, repeat_until, parent_job_id)
+        VALUES
+            (:name, :precinct_id, :template_id, :provider_id, :list_id, :voter_id,
+             :scheduled_at, 'Pending', :customer_id, :created_by,
+             :repeat_type, :repeat_every, :repeat_days, :repeat_time, :repeat_until, :parent_job_id)
+    """), {
+        "name":           job.name,
+        "precinct_id":    job.precinct_id,
+        "template_id":    job.template_id,
+        "provider_id":    job.provider_id,
+        "list_id":        getattr(job, 'list_id', None),
+        "voter_id":       getattr(job, 'voter_id', None),
+        "scheduled_at":   next_run,
+        "customer_id":    getattr(job, 'customer_id', None),
+        "created_by":     getattr(job, 'created_by', None),
+        "repeat_type":    job.repeat_type,
+        "repeat_every":   getattr(job, 'repeat_every', 1),
+        "repeat_days":    getattr(job, 'repeat_days', None),
+        "repeat_time":    getattr(job, 'repeat_time', None),
+        "repeat_until":   getattr(job, 'repeat_until', None),
+        "parent_job_id":  original_parent,
+    })
+    db.commit()
+    logger.info(f"Email Job {job.id}: spawned next occurrence scheduled at {next_run}")
+
 
 def _resolve_voters(db, job, channel: str) -> list:
     """
@@ -122,6 +215,8 @@ def process_sms_job(job_id: int):
             db.commit()
             return
 
+        meta_by_voter = _fetch_meta_values(db, getattr(job, 'list_id', None))
+
         # Monthly volume guard
         cid = getattr(job, 'customer_id', None)
         if cid is not None:
@@ -141,23 +236,9 @@ def process_sms_job(job_id: int):
         failed_count  = 0
 
         for voter in voters:
-            raw_phone      = voter.get("phone", "") or ""
-            e164_phone     = _normalize_phone(raw_phone)
-
-            first = voter.get("first_name") or ""
-            last  = voter.get("last_name")  or ""
-            full  = f"{first} {last}".strip()
-            body  = (
-                template.body
-                # CamelCase — shown in UI
-                .replace("{{FirstName}}", first)
-                .replace("{{LastName}}",  last)
-                .replace("{{FullName}}",  full)
-                # snake_case — backward compat
-                .replace("{{first_name}}", first)
-                .replace("{{last_name}}",  last)
-                .replace("{{full_name}}",  full)
-            )
+            raw_phone  = voter.get("phone", "") or ""
+            e164_phone = _normalize_phone(raw_phone)
+            body       = _substitute(template.body, voter, meta_by_voter.get(voter["id"], {}))
             try:
                 message = twilio_client.messages.create(
                     body=body,
@@ -235,6 +316,7 @@ def process_email_job(job_id: int):
             job.status = "Failed"; db.commit(); return
 
         voters = _resolve_voters(db, job, "email")
+        meta_by_voter = _fetch_meta_values(db, getattr(job, 'list_id', None))
 
         # Monthly volume guard
         email_cid = getattr(job, 'customer_id', None)
@@ -262,20 +344,7 @@ def process_email_job(job_id: int):
 
         with httpx.Client() as client:
             for voter in voters:
-                first     = voter.get("first_name") or ""
-                last      = voter.get("last_name")  or ""
-                full      = f"{first} {last}".strip()
-                text_body = (
-                    template.body
-                    # CamelCase — shown in UI
-                    .replace("{{FirstName}}", first)
-                    .replace("{{LastName}}",  last)
-                    .replace("{{FullName}}",  full)
-                    # snake_case — backward compat
-                    .replace("{{first_name}}", first)
-                    .replace("{{last_name}}",  last)
-                    .replace("{{full_name}}",  full)
-                )
+                text_body = _substitute(template.body, voter, meta_by_voter.get(voter["id"], {}))
                 html_body    = _text_to_html(text_body)
                 from_address = (
                     f"{provider.smtp_user} <{provider.config_email}>"
@@ -331,6 +400,10 @@ def process_email_job(job_id: int):
         job.status     = "Completed"
         job.recipients = success_count + failed_count
         db.commit()
+
+        # Spawn next occurrence if this is a recurring job
+        if getattr(job, 'repeat_type', None):
+            _spawn_next_email_job(db, job)
 
     except Exception as e:
         logger.error(f"Error processing Email job {job_id}: {e}")

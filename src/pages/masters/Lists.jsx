@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ListChecks, Plus, Users, Upload, Download, ArrowLeft, Trash2, Search, X, Star, Edit2, RefreshCw, UserPlus, Check } from 'lucide-react';
+import { ListChecks, Plus, Users, Upload, Download, ArrowLeft, Trash2, Search, X, Star, Edit2, RefreshCw, UserPlus, Check, Tag, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Badge from '../../components/shared/Badge';
 
@@ -45,6 +45,12 @@ const Lists = () => {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Meta tags
+  const [metaTags, setMetaTags] = useState([]);
+  const [isAddTagOpen, setIsAddTagOpen] = useState(false);
+  const [newTagLabel, setNewTagLabel] = useState('');
+  const [tagSaving, setTagSaving] = useState(false);
+
   // ── Fetch ─────────────────────────────────────────────────────────────────
 
   const fetchLists = async () => {
@@ -78,6 +84,16 @@ const Lists = () => {
     }
   };
 
+  const fetchMetaTags = async (listId) => {
+    try {
+      const res = await fetch(`/api/contact-lists/${listId}/meta-tags`);
+      const data = await res.json();
+      setMetaTags(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to fetch meta tags:', err);
+    }
+  };
+
   useEffect(() => { fetchLists(); }, []);
 
   // Debounced voter search
@@ -104,10 +120,14 @@ const Lists = () => {
     setSelectedList(list);
     setView('detail');
     fetchMembers(list.id);
+    fetchMetaTags(list.id);
     setMemberSearch('');
     setSearchResults([]);
     setAddMsg('');
     setAddError('');
+    setMetaTags([]);
+    setIsAddTagOpen(false);
+    setNewTagLabel('');
     setDefaultVoters([]);
     // Pre-load recipients so the user sees something to pick from immediately
     fetch('/api/voters')
@@ -220,7 +240,11 @@ const Lists = () => {
           body: JSON.stringify(rows),
         });
         const result = await res.json();
-        alert(`Added ${result.added} member(s). Skipped ${result.skipped} (not found or already in list).`);
+        const parts = [];
+        if (result.added > 0) parts.push(`${result.added} new member(s) added`);
+        if (result.updated > 0) parts.push(`${result.updated} existing member(s) updated with new tag values`);
+        if (result.skipped > 0) parts.push(`${result.skipped} skipped (email not found in system)`);
+        alert(parts.length ? parts.join('\n') : 'No changes made.');
         setIsUploadOpen(false);
         setCsvFile(null);
         fetchMembers(selectedList.id);
@@ -234,14 +258,57 @@ const Lists = () => {
     reader.readAsText(csvFile);
   };
 
-  const handleDownloadTemplate = () => {
-    const content = 'email,first_name,last_name\njohn@example.com,John,Doe\njane@example.com,Jane,Smith\n';
-    const blob = new Blob([content], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'list_members_template.csv';
-    a.click();
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await fetch(`/api/contact-lists/${selectedList.id}/csv-template`);
+      const text = await res.text();
+      const blob = new Blob([text], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedList.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_template.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Template download failed:', err);
+    }
+  };
+
+  const handleAddTag = async () => {
+    const label = newTagLabel.trim();
+    if (!label) return;
+    setTagSaving(true);
+    try {
+      const res = await fetch(`/api/contact-lists/${selectedList.id}/meta-tags`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tag_label: label }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.detail || 'Failed to add tag');
+        return;
+      }
+      setNewTagLabel('');
+      setIsAddTagOpen(false);
+      fetchMetaTags(selectedList.id);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setTagSaving(false);
+    }
+  };
+
+  const handleDeleteTag = async (tagKey) => {
+    if (!window.confirm(`Delete meta tag "{{${tagKey}}}"? This will remove all stored values for this tag.`)) return;
+    try {
+      await fetch(`/api/contact-lists/${selectedList.id}/meta-tags/${tagKey}`, { method: 'DELETE' });
+      fetchMetaTags(selectedList.id);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   // ── Create / Edit View ────────────────────────────────────────────────────
@@ -391,6 +458,93 @@ const Lists = () => {
           <div className="bg-white rounded-xl p-5 border border-brand-border">
             <p className="text-[10px] font-medium text-brand-textSecondary mb-1 uppercase tracking-wider">Status</p>
             <p className="text-xl font-bold text-brand-textPrimary">{selectedList.status}</p>
+          </div>
+        </div>
+
+        {/* Meta Tags */}
+        <div className="bg-white rounded-xl shadow-sm border border-brand-border overflow-hidden">
+          <div className="bg-gray-50 border-b border-brand-border px-6 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Tag size={18} className="text-indigo-600" />
+              <h3 className="font-bold text-brand-textPrimary">Meta Tags</h3>
+              <span className="text-xs text-brand-textMuted">Custom fields for this list's members</span>
+            </div>
+            <button
+              onClick={() => { setIsAddTagOpen(v => !v); setNewTagLabel(''); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors"
+            >
+              <Plus size={13} /> Add Tag
+            </button>
+          </div>
+          <div className="px-6 py-4 space-y-3">
+            {/* Add tag inline form */}
+            {isAddTagOpen && (
+              <div className="flex items-center gap-2 p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
+                <input
+                  type="text"
+                  value={newTagLabel}
+                  onChange={e => setNewTagLabel(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag(); } if (e.key === 'Escape') setIsAddTagOpen(false); }}
+                  placeholder="Tag name, e.g. Voter District"
+                  autoFocus
+                  className="flex-1 text-sm border border-indigo-200 rounded px-3 py-1.5 outline-none focus:border-indigo-400"
+                />
+                {newTagLabel.trim() && (
+                  <span className="text-xs font-mono text-indigo-500 whitespace-nowrap">
+                    {`{{${newTagLabel.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}}}`}
+                  </span>
+                )}
+                <button
+                  onClick={handleAddTag}
+                  disabled={!newTagLabel.trim() || tagSaving}
+                  className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                >
+                  {tagSaving ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  onClick={() => { setIsAddTagOpen(false); setNewTagLabel(''); }}
+                  className="p-1.5 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+
+            {/* Tag chips */}
+            <div className="flex flex-wrap gap-2">
+              {metaTags.map(tag => (
+                <div
+                  key={tag.tag_key}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${
+                    tag.is_default
+                      ? 'bg-gray-100 text-gray-600 border-gray-200'
+                      : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                  }`}
+                >
+                  {tag.is_default
+                    ? <Lock size={11} className="text-gray-400" />
+                    : <Tag size={11} className="text-indigo-500" />
+                  }
+                  <span className="font-mono">{`{{${tag.tag_key}}}`}</span>
+                  <span className="text-[10px] opacity-70">— {tag.tag_label}</span>
+                  {!tag.is_default && (
+                    <button
+                      onClick={() => handleDeleteTag(tag.tag_key)}
+                      className="ml-1 text-indigo-400 hover:text-red-500 transition-colors"
+                      title="Delete tag"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {metaTags.length === 0 && (
+                <p className="text-sm text-brand-textMuted">Loading tags…</p>
+              )}
+            </div>
+            <p className="text-xs text-brand-textMuted">
+              Default tags (<Lock size={10} className="inline" />) come from each recipient's profile. Custom tags let you store extra data per member — include them in your CSV upload or use <code className="bg-gray-100 px-1 rounded">{'{{tag_key}}'}</code> in templates.
+            </p>
           </div>
         </div>
 
@@ -576,7 +730,8 @@ const Lists = () => {
                   </div>
                   <ul className="text-xs space-y-1.5 text-brand-blue">
                     <li className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-brand-blue" /> Required: <code className="bg-blue-100 px-1 rounded">email</code></li>
-                    <li className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-brand-blue" /> Optional: <code className="bg-blue-100 px-1 rounded">first_name</code>, <code className="bg-blue-100 px-1 rounded">last_name</code></li>
+                    <li className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-brand-blue" /> Default: <code className="bg-blue-100 px-1 rounded">first_name</code>, <code className="bg-blue-100 px-1 rounded">last_name</code>, <code className="bg-blue-100 px-1 rounded">phone</code></li>
+                    <li className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-brand-blue" /> Custom tag columns are saved per member</li>
                     <li className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-brand-blue" /> Recipients must already exist in the system</li>
                   </ul>
                 </div>

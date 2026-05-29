@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
+import ListTagPicker from '../../components/shared/ListTagPicker';
 
 const EmailTemplates = () => {
   const [view, setView] = useState('list'); // 'list' or 'add'
   const [editingRow, setEditingRow] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
+  const bodyRef = useRef(null);
   const [format, setFormat] = useState('Plain Text');
 
   const API_URL = '/api/email-templates';
@@ -202,10 +204,11 @@ const EmailTemplates = () => {
                 </div>
               )}
 
-              <textarea 
+              <textarea
+                ref={bodyRef}
                 name="body"
-                className={`block w-full border border-brand-border px-4 py-4 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue min-h-[200px] transition-all ${format === 'HTML' ? 'rounded-b-lg' : 'rounded-lg'}`} 
-                required 
+                className={`block w-full border border-brand-border px-4 py-4 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue min-h-[200px] transition-all ${format === 'HTML' ? 'rounded-b-lg' : 'rounded-lg'}`}
+                required
                 placeholder="e.g. Dear {{FirstName}}, thank you for registering..."
                 defaultValue={editingRow?.body || ''}
               ></textarea>
@@ -218,6 +221,7 @@ const EmailTemplates = () => {
                 </p>
                 <p className="text-gray-400">Example: <em>Dear {'{{FirstName}}'}, your ballot has been received.</em></p>
               </div>
+              <ListTagPicker textareaRef={bodyRef} />
             </div>
 
             <div className="flex items-center space-x-3">

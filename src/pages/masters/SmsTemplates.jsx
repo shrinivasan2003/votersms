@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import FormInput from '../../components/shared/FormInput';
 import Badge from '../../components/shared/Badge';
+import ListTagPicker from '../../components/shared/ListTagPicker';
 
 const SmsTemplates = () => {
   const [view, setView] = useState('list'); // 'list' or 'add'
   const [editingRow, setEditingRow] = useState(null);
   const [templates, setTemplates] = useState([]);
+  const bodyRef = useRef(null);
   const [loading, setLoading] = useState(false);
 
   const API_URL = '/api/sms-templates';
@@ -149,10 +151,11 @@ const SmsTemplates = () => {
               
               <div className="space-y-2">
                 <label className="block text-sm font-bold text-brand-textPrimary">Message Body *</label>
-                <textarea 
+                <textarea
+                  ref={bodyRef}
                   name="body"
-                  className="block w-full rounded-lg border border-brand-border px-4 py-4 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue min-h-[160px] transition-all" 
-                  required 
+                  className="block w-full rounded-lg border border-brand-border px-4 py-4 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue min-h-[160px] transition-all"
+                  required
                   placeholder="e.g. Dear {{FirstName}}, your ballot is ready..."
                   defaultValue={editingRow?.body || ''}
                 ></textarea>
@@ -165,6 +168,7 @@ const SmsTemplates = () => {
                   </p>
                   <p className="text-gray-400">Example: <em>Dear {'{{FirstName}}'}, your appointment is confirmed.</em></p>
                 </div>
+                <ListTagPicker textareaRef={bodyRef} />
               </div>
 
               <div className="flex items-center space-x-3">

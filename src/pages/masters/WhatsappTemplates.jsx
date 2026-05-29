@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
+import ListTagPicker from '../../components/shared/ListTagPicker';
 
 const WhatsappTemplates = () => {
   const [view, setView] = useState('list'); // 'list' or 'add'
   const [editingRow, setEditingRow] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
+  const bodyRef = useRef(null);
 
   const API_URL = '/api/whatsapp-templates';
 
@@ -152,16 +154,18 @@ const WhatsappTemplates = () => {
               
               <div className="space-y-2">
                 <label className="block text-sm font-bold text-brand-textPrimary">Message Body *</label>
-                <textarea 
+                <textarea
+                  ref={bodyRef}
                   name="body"
-                  className="block w-full rounded-lg border border-brand-border px-4 py-4 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue min-h-[160px] transition-all" 
-                  required 
+                  className="block w-full rounded-lg border border-brand-border px-4 py-4 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue min-h-[160px] transition-all"
+                  required
                   placeholder="Use {{FirstName}}, {{LastName}}, or {{FullName}} for variables"
                   defaultValue={editingRow?.body || ''}
                 ></textarea>
                 <p className="text-xs text-brand-textMuted pt-1">
                   Available variables: {'{FirstName}'}, {'{LastName}'}, {'{FullName}'}
                 </p>
+                <ListTagPicker textareaRef={bodyRef} />
               </div>
 
               <div className="flex items-center space-x-3">
