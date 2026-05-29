@@ -6,6 +6,7 @@ from app.database import SessionLocal
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 from app.utils.limits import check_limit
+from app.utils.audit import log_audit
 
 router = APIRouter()
 
@@ -80,14 +81,20 @@ def create_whatsapp_job(
             ).fetchone().c
             check_limit(db, cid, "max_whatsapp_jobs", current_count, "WhatsApp Job")
 
+        template_name = None
+        if req.get('template_id'):
+            t_row = db.execute(text("SELECT name FROM whatsapp_templates WHERE id=:id"), {"id": req['template_id']}).fetchone()
+            template_name = t_row.name if t_row else None
+
         result = db.execute(
             text("""
                 INSERT INTO whatsapp_jobs
-                    (precinct_id, template_id, provider_id, scheduled_at, status, list_id, voter_id, customer_id)
+                    (name, precinct_id, template_id, provider_id, scheduled_at, status, list_id, voter_id, customer_id, created_by)
                 VALUES
-                    (:precinct_id, :template_id, :provider_id, :scheduled_at, :status, :list_id, :voter_id, :customer_id)
+                    (:name, :precinct_id, :template_id, :provider_id, :scheduled_at, :status, :list_id, :voter_id, :customer_id, :created_by)
             """),
             {
+                "name":         req.get('name') or template_name,
                 "precinct_id":  req.get('precinct_id') or None,
                 "template_id":  req.get('template_id'),
                 "provider_id":  req.get('provider_id') or None,
@@ -96,10 +103,14 @@ def create_whatsapp_job(
                 "list_id":      req.get('list_id')  or None,
                 "voter_id":     req.get('voter_id') or None,
                 "customer_id":  current_user.customer_id,
+                "created_by":   current_user.id,
             },
         )
         db.commit()
-        return {"id": result.lastrowid, **req}
+        new_id = result.lastrowid
+        log_audit(db, current_user.customer_id, 'whatsapp_job', new_id,
+                  req.get('name') or template_name, 'CREATE', current_user, new_values=req)
+        return {"id": new_id, **req}
     except HTTPException:
         raise
     except Exception as e:
@@ -114,8 +125,12 @@ def delete_whatsapp_job(
 ):
     try:
         where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
+        old_row = db.execute(text(f"SELECT * FROM whatsapp_jobs WHERE {where}"), {"id": id, "cid": current_user.customer_id}).fetchone()
+        old_vals = dict(old_row._mapping) if old_row else None
         db.execute(text(f"DELETE FROM whatsapp_jobs WHERE {where}"), {"id": id, "cid": current_user.customer_id})
         db.commit()
+        cid = (old_vals or {}).get('customer_id') or current_user.customer_id
+        log_audit(db, cid, 'whatsapp_job', id, (old_vals or {}).get('name'), 'DELETE', current_user, old_values=old_vals)
         return {"message": "Deleted successfully"}
     except Exception as e:
         db.rollback()

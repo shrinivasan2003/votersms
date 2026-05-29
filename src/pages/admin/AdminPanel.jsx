@@ -5,7 +5,9 @@ import {
   Building2, Mail, UserPlus, Activity, Trash2, PowerOff,
   CheckCircle, XCircle, Power, Settings, Send, PauseCircle,
   LogOut, ChevronRight, Users, BarChart3, Database, SlidersHorizontal, X,
+  ClipboardList,
 } from 'lucide-react';
+import AuditLog from './AuditLog';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../hooks/useToast';
 import { useApi } from '../../hooks/useApi';
@@ -668,9 +670,10 @@ const AdminPanel = () => {
   };
 
   const tabs = [
-    { key: 'create',   label: 'Create Customer', Icon: UserPlus  },
-    { key: 'monitor',  label: 'Monitor Accounts', Icon: Activity  },
-    { key: 'settings', label: 'Settings',         Icon: Settings  },
+    { key: 'create',   label: 'Create Customer',  Icon: UserPlus      },
+    { key: 'monitor',  label: 'Monitor Accounts', Icon: Activity      },
+    { key: 'audit',    label: 'Audit Log',        Icon: ClipboardList },
+    { key: 'settings', label: 'Settings',         Icon: Settings      },
   ];
 
   // ── Login state ──────────────────────────────────────────────────────────────
@@ -799,6 +802,7 @@ const AdminPanel = () => {
       <div className="flex-1 px-6 lg:px-8 py-8 max-w-5xl mx-auto w-full">
         {tab === 'create'   && <CreateCustomerTab />}
         {tab === 'monitor'  && <MonitorAccountsTab />}
+        {tab === 'audit'    && <AuditLog />}
         {tab === 'settings' && <MasterSettingsTab />}
       </div>
     </div>

@@ -8,6 +8,7 @@ from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 from app.utils.limits import check_limit
 from app.services.message_processor import process_email_job
+from app.utils.audit import log_audit
 
 router = APIRouter()
 
@@ -53,14 +54,16 @@ def create_email_template(
             check_limit(db, cid, "max_email_templates", current_count, "Email Template")
 
         result = db.execute(
-            text("INSERT INTO email_templates (code, name, subject, body, status, customer_id) "
-                 "VALUES (:code, :name, :subject, :body, :status, :customer_id)"),
+            text("INSERT INTO email_templates (code, name, subject, body, status, customer_id, created_by) "
+                 "VALUES (:code, :name, :subject, :body, :status, :customer_id, :created_by)"),
             {"code": req.get('code'), "name": req.get('name'), "subject": req.get('subject'),
              "body": req.get('body'), "status": req.get('status', 'Active'),
-             "customer_id": current_user.customer_id},
+             "customer_id": current_user.customer_id, "created_by": current_user.id},
         )
         db.commit()
-        return {"id": result.lastrowid, **req}
+        new_id = result.lastrowid
+        log_audit(db, current_user.customer_id, 'email_template', new_id, req.get('name'), 'CREATE', current_user, new_values=req)
+        return {"id": new_id, **req}
     except HTTPException:
         raise
     except Exception as e:
@@ -76,12 +79,16 @@ def update_email_template(
 ):
     try:
         where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
+        old_row = db.execute(text(f"SELECT * FROM email_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id}).fetchone()
+        old_vals = dict(old_row._mapping) if old_row else None
         db.execute(
             text(f"UPDATE email_templates SET code=:code, name=:name, subject=:subject, body=:body, status=:status WHERE {where}"),
             {"code": req.get('code'), "name": req.get('name'), "subject": req.get('subject'),
              "body": req.get('body'), "status": req.get('status'), "id": id, "cid": current_user.customer_id},
         )
         db.commit()
+        cid = (old_vals or {}).get('customer_id') or current_user.customer_id
+        log_audit(db, cid, 'email_template', id, req.get('name'), 'UPDATE', current_user, old_values=old_vals, new_values=req)
         return {"message": "Updated successfully"}
     except Exception as e:
         db.rollback()
@@ -95,8 +102,12 @@ def delete_email_template(
 ):
     try:
         where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
+        old_row = db.execute(text(f"SELECT * FROM email_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id}).fetchone()
+        old_vals = dict(old_row._mapping) if old_row else None
         db.execute(text(f"DELETE FROM email_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id})
         db.commit()
+        cid = (old_vals or {}).get('customer_id') or current_user.customer_id
+        log_audit(db, cid, 'email_template', id, (old_vals or {}).get('name'), 'DELETE', current_user, old_values=old_vals)
         return {"message": "Deleted successfully"}
     except Exception as e:
         db.rollback()
@@ -184,14 +195,20 @@ def create_email_job(
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid scheduled_at format.")
 
+        template_name = None
+        if req.get('template_id'):
+            t_row = db.execute(text("SELECT name FROM email_templates WHERE id=:id"), {"id": req['template_id']}).fetchone()
+            template_name = t_row.name if t_row else None
+
         result = db.execute(
             text("""
                 INSERT INTO email_jobs
-                    (precinct_id, template_id, provider_id, scheduled_at, status, list_id, voter_id, customer_id)
+                    (name, precinct_id, template_id, provider_id, scheduled_at, status, list_id, voter_id, customer_id, created_by)
                 VALUES
-                    (:precinct_id, :template_id, :provider_id, :scheduled_at, :status, :list_id, :voter_id, :customer_id)
+                    (:name, :precinct_id, :template_id, :provider_id, :scheduled_at, :status, :list_id, :voter_id, :customer_id, :created_by)
             """),
             {
+                "name":         req.get('name') or template_name,
                 "precinct_id":  req.get('precinct_id') or None,
                 "template_id":  req.get('template_id'),
                 "provider_id":  req.get('provider_id') or None,
@@ -200,16 +217,17 @@ def create_email_job(
                 "list_id":      req.get('list_id')  or None,
                 "voter_id":     req.get('voter_id') or None,
                 "customer_id":  current_user.customer_id,
+                "created_by":   current_user.id,
             },
         )
         db.commit()
         job_id = result.lastrowid
+        log_audit(db, current_user.customer_id, 'email_job', job_id,
+                  req.get('name') or template_name, 'CREATE', current_user, new_values=req)
 
         scheduled_at_str = req.get('scheduled_at') or None
         if not scheduled_at_str:
-            # No schedule → send immediately
             background_tasks.add_task(process_email_job, job_id)
-        # else: future schedule → scheduler loop will dispatch at the right time
 
         return {"id": job_id, **req}
     except HTTPException:
@@ -226,8 +244,12 @@ def delete_email_job(
 ):
     try:
         where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
+        old_row = db.execute(text(f"SELECT * FROM email_jobs WHERE {where}"), {"id": id, "cid": current_user.customer_id}).fetchone()
+        old_vals = dict(old_row._mapping) if old_row else None
         db.execute(text(f"DELETE FROM email_jobs WHERE {where}"), {"id": id, "cid": current_user.customer_id})
         db.commit()
+        cid = (old_vals or {}).get('customer_id') or current_user.customer_id
+        log_audit(db, cid, 'email_job', id, (old_vals or {}).get('name'), 'DELETE', current_user, old_values=old_vals)
         return {"message": "Deleted successfully"}
     except Exception as e:
         db.rollback()

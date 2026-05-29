@@ -8,6 +8,7 @@ from app.dependencies.security import get_current_user
 from app.models import User as UserModel
 from app.utils.limits import check_limit
 from app.services.message_processor import process_sms_job
+from app.utils.audit import log_audit
 
 router = APIRouter()
 
@@ -97,14 +98,20 @@ def create_sms_job(
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid scheduled_at format.")
 
+        template_name = None
+        if req.get('template_id'):
+            t_row = db.execute(text("SELECT name FROM sms_templates WHERE id=:id"), {"id": req['template_id']}).fetchone()
+            template_name = t_row.name if t_row else None
+
         result = db.execute(
             text("""
                 INSERT INTO sms_jobs
-                    (precinct_id, template_id, provider_id, scheduled_at, status, list_id, voter_id, customer_id)
+                    (name, precinct_id, template_id, provider_id, scheduled_at, status, list_id, voter_id, customer_id, created_by)
                 VALUES
-                    (:precinct_id, :template_id, :provider_id, :scheduled_at, :status, :list_id, :voter_id, :customer_id)
+                    (:name, :precinct_id, :template_id, :provider_id, :scheduled_at, :status, :list_id, :voter_id, :customer_id, :created_by)
             """),
             {
+                "name":        req.get('name') or template_name,
                 "precinct_id": req.get('precinct_id') or None,
                 "template_id": req.get('template_id'),
                 "provider_id": req.get('provider_id') or None,
@@ -113,10 +120,13 @@ def create_sms_job(
                 "list_id":  req.get('list_id')  or None,
                 "voter_id": req.get('voter_id') or None,
                 "customer_id": getattr(current_user, 'customer_id', None),
+                "created_by":  getattr(current_user, 'id', None),
             }
         )
         db.commit()
         job_id = result.lastrowid
+        log_audit(db, getattr(current_user, 'customer_id', None), 'sms_job', job_id,
+                  req.get('name') or template_name, 'CREATE', current_user, new_values=req)
 
         scheduled_at_str = req.get('scheduled_at') or None
         if not scheduled_at_str:
@@ -132,10 +142,14 @@ def create_sms_job(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/sms-jobs/{id}")
-def delete_sms_job(id: int, db: Session = Depends(_get_session)):
+def delete_sms_job(id: int, db: Session = Depends(_get_session), current_user = Depends(get_current_user)):
     try:
+        old_row = db.execute(text("SELECT * FROM sms_jobs WHERE id=:id"), {"id": id}).fetchone()
+        old_vals = dict(old_row._mapping) if old_row else None
         db.execute(text("DELETE FROM sms_jobs WHERE id=:id"), {"id": id})
         db.commit()
+        cid = (old_vals or {}).get('customer_id') or getattr(current_user, 'customer_id', None)
+        log_audit(db, cid, 'sms_job', id, (old_vals or {}).get('name'), 'DELETE', current_user, old_values=old_vals)
         return {"message": "Deleted successfully"}
     except Exception as e:
         db.rollback()
@@ -151,6 +165,8 @@ def update_sms_job(
     if getattr(current_user, "role", "").lower() != "admin":
         raise HTTPException(status_code=403, detail="Admin rights required")
     try:
+        old_row = db.execute(text("SELECT * FROM sms_jobs WHERE id=:id"), {"id": id}).fetchone()
+        old_vals = dict(old_row._mapping) if old_row else None
         db.execute(
             text("""
                 UPDATE sms_jobs SET
@@ -175,6 +191,8 @@ def update_sms_job(
             }
         )
         db.commit()
+        cid = (old_vals or {}).get('customer_id') or getattr(current_user, 'customer_id', None)
+        log_audit(db, cid, 'sms_job', id, (old_vals or {}).get('name'), 'UPDATE', current_user, old_values=old_vals, new_values=req)
         return {"id": id, **req}
     except Exception as e:
         db.rollback()

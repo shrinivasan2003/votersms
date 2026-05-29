@@ -6,6 +6,7 @@ from app.database import SessionLocal
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 from app.utils.limits import check_limit
+from app.utils.audit import log_audit
 
 router = APIRouter()
 
@@ -49,12 +50,15 @@ def create_whatsapp_template(
             check_limit(db, cid, "max_whatsapp_templates", current_count, "WhatsApp Template")
 
         result = db.execute(
-            text("INSERT INTO whatsapp_templates (code, name, body, status, customer_id) VALUES (:code, :name, :body, :status, :customer_id)"),
+            text("INSERT INTO whatsapp_templates (code, name, body, status, customer_id, created_by) VALUES (:code, :name, :body, :status, :customer_id, :created_by)"),
             {"code": req.get('code'), "name": req.get('name'), "body": req.get('body'),
-             "status": req.get('status', 'Active'), "customer_id": current_user.customer_id},
+             "status": req.get('status', 'Active'), "customer_id": current_user.customer_id,
+             "created_by": current_user.id},
         )
         db.commit()
-        return {"id": result.lastrowid, **req}
+        new_id = result.lastrowid
+        log_audit(db, current_user.customer_id, 'whatsapp_template', new_id, req.get('name'), 'CREATE', current_user, new_values=req)
+        return {"id": new_id, **req}
     except HTTPException:
         raise
     except Exception as e:
@@ -70,12 +74,16 @@ def update_whatsapp_template(
 ):
     try:
         where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
+        old_row = db.execute(text(f"SELECT * FROM whatsapp_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id}).fetchone()
+        old_vals = dict(old_row._mapping) if old_row else None
         db.execute(
             text(f"UPDATE whatsapp_templates SET code=:code, name=:name, body=:body, status=:status WHERE {where}"),
             {"code": req.get('code'), "name": req.get('name'), "body": req.get('body'),
              "status": req.get('status'), "id": id, "cid": current_user.customer_id},
         )
         db.commit()
+        cid = (old_vals or {}).get('customer_id') or current_user.customer_id
+        log_audit(db, cid, 'whatsapp_template', id, req.get('name'), 'UPDATE', current_user, old_values=old_vals, new_values=req)
         return {"message": "Updated successfully"}
     except Exception as e:
         db.rollback()
@@ -89,8 +97,12 @@ def delete_whatsapp_template(
 ):
     try:
         where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
+        old_row = db.execute(text(f"SELECT * FROM whatsapp_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id}).fetchone()
+        old_vals = dict(old_row._mapping) if old_row else None
         db.execute(text(f"DELETE FROM whatsapp_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id})
         db.commit()
+        cid = (old_vals or {}).get('customer_id') or current_user.customer_id
+        log_audit(db, cid, 'whatsapp_template', id, (old_vals or {}).get('name'), 'DELETE', current_user, old_values=old_vals)
         return {"message": "Deleted successfully"}
     except Exception as e:
         db.rollback()

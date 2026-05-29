@@ -21,6 +21,7 @@ from app.database import get_db
 from app.schemas import UserOut
 from app.dependencies.security import get_current_user
 from app.utils.limits import check_limit
+from app.utils.audit import log_audit
 
 router = APIRouter()
 
@@ -94,17 +95,20 @@ def create_contact_list(
             check_limit(db, cid, "max_contact_lists", current_count, "Contact List")
 
         result = db.execute(
-            text("INSERT INTO contact_lists (name, description, status, customer_id) "
-                 "VALUES (:name, :description, :status, :customer_id)"),
+            text("INSERT INTO contact_lists (name, description, status, customer_id, created_by) "
+                 "VALUES (:name, :description, :status, :customer_id, :created_by)"),
             {
                 "name": req.get("name"),
                 "description": req.get("description", ""),
                 "status": req.get("status", "Active"),
                 "customer_id": current_user.customer_id,
+                "created_by": current_user.id,
             }
         )
         db.commit()
-        return {"id": result.lastrowid, **req}
+        new_id = result.lastrowid
+        log_audit(db, current_user.customer_id, 'contact_list', new_id, req.get('name'), 'CREATE', current_user, new_values=req)
+        return {"id": new_id, **req}
     except HTTPException:
         raise
     except Exception as e:
@@ -121,6 +125,8 @@ def update_contact_list(
 ):
     cid = current_user.customer_id
     try:
+        old_row = db.execute(text("SELECT * FROM contact_lists WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": cid}).fetchone()
+        old_vals = dict(old_row._mapping) if old_row else None
         db.execute(
             text("UPDATE contact_lists SET name=:name, description=:description, status=:status "
                  "WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
@@ -133,6 +139,8 @@ def update_contact_list(
             }
         )
         db.commit()
+        effective_cid = (old_vals or {}).get('customer_id') or cid
+        log_audit(db, effective_cid, 'contact_list', id, req.get('name'), 'UPDATE', current_user, old_values=old_vals, new_values=req)
         return {"id": id, **req}
     except Exception as e:
         db.rollback()
@@ -147,11 +155,15 @@ def delete_contact_list(
 ):
     cid = current_user.customer_id
     try:
+        old_row = db.execute(text("SELECT * FROM contact_lists WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": cid}).fetchone()
+        old_vals = dict(old_row._mapping) if old_row else None
         db.execute(
             text("DELETE FROM contact_lists WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
             {"id": id, "cid": cid}
         )
         db.commit()
+        effective_cid = (old_vals or {}).get('customer_id') or cid
+        log_audit(db, effective_cid, 'contact_list', id, (old_vals or {}).get('name'), 'DELETE', current_user, old_values=old_vals)
         return {"message": "Deleted successfully"}
     except Exception as e:
         db.rollback()
