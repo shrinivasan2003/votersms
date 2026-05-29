@@ -69,9 +69,7 @@ const SliderCaptcha = ({ onVerify }) => {
             <span className="text-xs font-bold text-green-600 flex items-center gap-1.5">
               <CheckCircle size={13} /> Verified — you&apos;re human!
             </span>
-          ) : (
-            <span className="text-xs text-gray-400 font-medium">→ →</span>
-          )}
+          ) : null}
         </div>
 
         {/* Draggable handle */}
