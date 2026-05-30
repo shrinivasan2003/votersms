@@ -8,7 +8,7 @@
  *   onClose – function to close the modal
  */
 import { useState, useEffect, useCallback } from 'react';
-import { BarChart2, Monitor, Smartphone, Tablet, RefreshCw } from 'lucide-react';
+import { BarChart2, Monitor, Smartphone, Tablet, RefreshCw, CheckCircle2, XCircle, MousePointerClick, AlertTriangle, Mail } from 'lucide-react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -46,8 +46,9 @@ const EventTypeBadge = ({ type }) => {
 // ── Modal ─────────────────────────────────────────────────────────────────────
 
 const EmailAnalyticsModal = ({ job, onClose }) => {
-  const [data, setData]       = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData]             = useState(null);
+  const [loading, setLoading]       = useState(true);
+  const [recipientFilter, setRecipientFilter] = useState('all'); // 'all' | 'opened' | 'not_opened'
 
   const load = useCallback(() => {
     setLoading(true);
@@ -192,6 +193,107 @@ const EmailAnalyticsModal = ({ job, onClose }) => {
                   )}
                 </div>
               )}
+
+              {/* ── Recipient Status ── */}
+              {data.recipients?.length > 0 && (() => {
+                const total    = data.recipients.length;
+                const opened   = data.recipients.filter(r => r.opened).length;
+                const notOpened = total - opened;
+                const filtered = recipientFilter === 'opened'
+                  ? data.recipients.filter(r => r.opened)
+                  : recipientFilter === 'not_opened'
+                  ? data.recipients.filter(r => !r.opened)
+                  : data.recipients;
+
+                return (
+                  <div>
+                    {/* Section header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                      <div>
+                        <h3 className="font-bold text-sm text-brand-textPrimary">Recipient Status</h3>
+                        <p className="text-xs text-brand-textMuted mt-0.5">
+                          <span className="text-green-600 font-bold">{opened}</span> of <span className="font-bold">{total}</span> opened
+                          {total > 0 && <span className="ml-1 text-gray-400">({Math.round(opened / total * 100)}%)</span>}
+                        </p>
+                      </div>
+                      {/* Filter tabs */}
+                      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg text-xs font-semibold shrink-0">
+                        {[
+                          { key: 'all',        label: `All (${total})` },
+                          { key: 'opened',     label: `Opened (${opened})` },
+                          { key: 'not_opened', label: `Not Opened (${notOpened})` },
+                        ].map(({ key, label }) => (
+                          <button
+                            key={key}
+                            onClick={() => setRecipientFilter(key)}
+                            className={`px-3 py-1.5 rounded-md transition-all ${
+                              recipientFilter === key
+                                ? 'bg-white text-brand-textPrimary shadow-sm'
+                                : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Table */}
+                    <div className="overflow-x-auto rounded-xl border border-brand-border">
+                      <table className="min-w-full text-sm divide-y divide-brand-border">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            {['Recipient', 'Email', 'Delivered', 'Opened', 'Clicked', 'Bounced', 'Last Opened'].map(h => (
+                              <th key={h} className="px-4 py-3 text-left text-[10px] font-bold text-brand-textSecondary uppercase tracking-wider whitespace-nowrap">
+                                {h}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-brand-border">
+                          {filtered.map((r, i) => (
+                            <tr key={i} className={`transition-colors ${r.opened ? 'hover:bg-green-50/40' : 'hover:bg-gray-50'}`}>
+                              <td className="px-4 py-3 font-semibold text-brand-textPrimary whitespace-nowrap">
+                                {r.recipient_name}
+                              </td>
+                              <td className="px-4 py-3 text-brand-textSecondary text-xs max-w-[180px] truncate">
+                                {r.recipient_email}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                {r.delivered
+                                  ? <CheckCircle2 size={16} className="text-green-500" />
+                                  : <XCircle      size={16} className="text-gray-300"  />}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                {r.opened
+                                  ? <span className="flex items-center gap-1 text-green-600 font-bold text-xs">
+                                      <CheckCircle2 size={14} /> Yes {r.total_opens > 1 && <span className="text-gray-400 font-normal">×{r.total_opens}</span>}
+                                    </span>
+                                  : <span className="flex items-center gap-1 text-gray-400 text-xs">
+                                      <XCircle size={14} /> Not yet
+                                    </span>}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                {r.clicked
+                                  ? <span className="flex items-center gap-1 text-purple-600 font-bold text-xs"><MousePointerClick size={14} /> Yes</span>
+                                  : <XCircle size={16} className="text-gray-300" />}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                {r.bounced
+                                  ? <span className="flex items-center gap-1 text-red-500 font-bold text-xs"><AlertTriangle size={14} /> Bounced</span>
+                                  : <span className="text-gray-300 text-xs">—</span>}
+                              </td>
+                              <td className="px-4 py-3 text-xs text-brand-textMuted whitespace-nowrap">
+                                {r.last_opened_at ? fmtDateTime(r.last_opened_at) : <span className="text-gray-300">—</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* ── Recent event feed ── */}
               <div>

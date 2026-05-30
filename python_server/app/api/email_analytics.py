@@ -167,12 +167,40 @@ def get_email_analytics_detail(
             LIMIT 200
         """), {"jid": job_id}).fetchall()
 
+        # ── Per-recipient status ──
+        recipients = db.execute(text("""
+            SELECT
+                ejm.voter_id,
+                COALESCE(NULLIF(TRIM(CONCAT(v.first_name, ' ', COALESCE(v.last_name,''))), ''), ejm.recipient_email)
+                                                                        AS recipient_name,
+                ejm.recipient_email,
+                ejm.sent_at,
+                MAX(CASE WHEN ee.event_type='delivery' THEN 1 ELSE 0 END) AS delivered,
+                MAX(CASE WHEN ee.event_type='open'     THEN 1 ELSE 0 END) AS opened,
+                MAX(CASE WHEN ee.event_type='click'    THEN 1 ELSE 0 END) AS clicked,
+                MAX(CASE WHEN ee.event_type='bounce'   THEN 1 ELSE 0 END) AS bounced,
+                MAX(CASE WHEN ee.event_type='spam'     THEN 1 ELSE 0 END) AS spam,
+                SUM(CASE WHEN ee.event_type='open'     THEN 1 ELSE 0 END) AS total_opens,
+                MAX(CASE WHEN ee.event_type='open'  THEN ee.occurred_at END) AS last_opened_at,
+                MAX(CASE WHEN ee.event_type='click' THEN ee.occurred_at END) AS last_clicked_at
+            FROM email_job_messages ejm
+            LEFT JOIN voters      v  ON ejm.voter_id        = v.id
+            LEFT JOIN email_events ee ON ejm.postmark_message_id = ee.postmark_message_id
+            WHERE ejm.job_id = :jid
+            GROUP BY ejm.id, ejm.voter_id, ejm.recipient_email, ejm.sent_at,
+                     v.first_name, v.last_name
+            ORDER BY
+                MAX(CASE WHEN ee.event_type='open' THEN 1 ELSE 0 END) DESC,
+                ejm.sent_at ASC
+        """), {"jid": job_id}).fetchall()
+
         return {
             "job_id": job_id,
             "summary": summary,
             "platforms": [dict(r._mapping) for r in platforms],
             "clients": [dict(r._mapping) for r in clients],
             "recent_events": [dict(r._mapping) for r in events],
+            "recipients": [dict(r._mapping) for r in recipients],
         }
     except Exception as e:
         err_str = str(e).lower()
@@ -185,5 +213,6 @@ def get_email_analytics_detail(
                 "platforms": [],
                 "clients": [],
                 "recent_events": [],
+                "recipients": [],
             }
         raise HTTPException(status_code=500, detail=str(e))
