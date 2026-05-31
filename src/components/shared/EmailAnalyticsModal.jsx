@@ -111,12 +111,14 @@ const EmailAnalyticsModal = ({ job, onClose }) => {
           ) : (
             <>
               {/* ── Top stat cards ── */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
                 {[
                   { label: 'Sent',           value: data.summary.total_sent      ?? 0, color: 'bg-[#1a56db]' },
                   { label: 'Delivered',      value: data.summary.deliveries      ?? 0, color: 'bg-[#2ecc71]' },
                   { label: 'Unique Opens',   value: data.summary.unique_opens    ?? 0, color: 'bg-[#10b981]' },
+                  { label: 'Total Opens',    value: data.summary.total_opens     ?? 0, color: 'bg-[#059669]' },
                   { label: 'Unique Clicks',  value: data.summary.unique_clicks   ?? 0, color: 'bg-[#9b59b6]' },
+                  { label: 'Total Clicks',   value: data.summary.total_clicks    ?? 0, color: 'bg-[#7c3aed]' },
                 ].map(({ label, value, color }) => (
                   <div key={label} className={`${color} rounded-lg p-3 sm:p-4 text-white relative overflow-hidden shadow-sm`}>
                     <p className="text-[9px] sm:text-[10px] font-medium opacity-90 mb-1 uppercase tracking-wider">{label}</p>
