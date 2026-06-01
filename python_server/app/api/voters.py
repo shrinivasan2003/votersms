@@ -26,27 +26,25 @@ def get_voters(
         cid = current_user.customer_id
         if search:
             q = f"%{search}%"
-            cid_filter = "AND v.customer_id=:cid" if cid else ""
-            result = db.execute(text(f"""
+            result = db.execute(text("""
                 SELECT v.*, p.name as precinct_name
                 FROM voters v
                 LEFT JOIN precincts p ON v.precinct_id = p.id
                 WHERE (v.first_name LIKE :q OR v.last_name LIKE :q
                    OR v.email LIKE :q OR v.phone LIKE :q
                    OR CONCAT(v.first_name, ' ', v.last_name) LIKE :q)
-                {cid_filter}
+                AND (:cid IS NULL OR v.customer_id = :cid)
                 ORDER BY v.first_name, v.last_name
                 LIMIT 50
-            """), {"q": q, "cid": cid} if cid else {"q": q})
+            """), {"q": q, "cid": cid})
         else:
-            cid_filter = "WHERE v.customer_id=:cid" if cid else ""
-            result = db.execute(text(f"""
+            result = db.execute(text("""
                 SELECT v.*, p.name as precinct_name
                 FROM voters v
                 LEFT JOIN precincts p ON v.precinct_id = p.id
-                {cid_filter}
+                WHERE (:cid IS NULL OR v.customer_id = :cid)
                 ORDER BY v.id DESC
-            """), {"cid": cid} if cid else {})
+            """), {"cid": cid})
         return [dict(row._mapping) for row in result]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -92,10 +90,10 @@ def update_voter(
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
         db.execute(
-            text(f"UPDATE voters SET first_name=:first_name, last_name=:last_name, "
-                 f"email=:email, phone=:phone, precinct_id=:precinct_id, status=:status WHERE {where}"),
+            text("UPDATE voters SET first_name=:first_name, last_name=:last_name, "
+                 "email=:email, phone=:phone, precinct_id=:precinct_id, status=:status "
+                 "WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
             {
                 "first_name": req.get('first_name'), "last_name": req.get('last_name'),
                 "email": req.get('email'), "phone": req.get('phone'),
@@ -116,8 +114,7 @@ def delete_voter(
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
-        db.execute(text(f"DELETE FROM voters WHERE {where}"), {"id": id, "cid": current_user.customer_id})
+        db.execute(text("DELETE FROM voters WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id})
         db.commit()
         return {"message": "Deleted successfully"}
     except Exception as e:
@@ -140,10 +137,9 @@ def bulk_voters_upload(
                 {"cid": cid},
             ).fetchone().c
             check_limit(db, cid, "max_voters", current_count + len(voters) - 1, "Voter")
-        cid_filter = "AND customer_id=:cid" if cid else ""
         precincts_result = db.execute(
-            text(f"SELECT id, name, code FROM precincts WHERE 1=1 {cid_filter}"),
-            {"cid": cid} if cid else {},
+            text("SELECT id, name, code FROM precincts WHERE (:cid IS NULL OR customer_id = :cid)"),
+            {"cid": cid},
         )
         precincts = [dict(row._mapping) for row in precincts_result]
         precinct_map = {}

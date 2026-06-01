@@ -74,7 +74,6 @@ def update_whatsapp_provider(
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
         db.execute(text(f"""
             UPDATE whatsapp_providers
             SET code        = :code,
@@ -114,8 +113,7 @@ def delete_whatsapp_provider(
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
-        db.execute(text(f"DELETE FROM whatsapp_providers WHERE {where}"), {"id": id, "cid": current_user.customer_id})
+        db.execute(text("DELETE FROM whatsapp_providers WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id})
         db.commit()
         return {"message": "Deleted successfully"}
     except Exception as e:

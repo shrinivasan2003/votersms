@@ -279,10 +279,9 @@ def bulk_add_list_members(
             email = item.get("email", "").strip()
 
             if not voter_id and email:
-                cid_clause = "AND customer_id=:cid" if cid is not None else ""
                 row = db.execute(
-                    text(f"SELECT id FROM voters WHERE LOWER(email)=LOWER(:email) {cid_clause} LIMIT 1"),
-                    {"email": email, "cid": cid} if cid is not None else {"email": email}
+                    text("SELECT id FROM voters WHERE LOWER(email)=LOWER(:email) AND (:cid IS NULL OR customer_id=:cid) LIMIT 1"),
+                    {"email": email, "cid": cid}
                 ).fetchone()
                 if row:
                     voter_id = row[0]

@@ -178,9 +178,8 @@ def mark_reply_read(
 ):
     """Mark a reply as read."""
     try:
-        where = "id=:rid AND (customer_id=:cid OR :cid IS NULL)"
         db.execute(
-            text(f"UPDATE email_replies SET is_read=1 WHERE {where}"),
+            text("UPDATE email_replies SET is_read=1 WHERE id=:rid AND (customer_id=:cid OR :cid IS NULL)"),
             {"rid": reply_id, "cid": current_user.customer_id},
         )
         db.commit()
@@ -197,8 +196,10 @@ def delete_reply(
     current_user=Depends(__import__("app.dependencies.security", fromlist=["get_current_user"]).get_current_user),
 ):
     try:
-        where = "id=:rid AND (customer_id=:cid OR :cid IS NULL)"
-        db.execute(text(f"DELETE FROM email_replies WHERE {where}"), {"rid": reply_id, "cid": current_user.customer_id})
+        db.execute(
+            text("DELETE FROM email_replies WHERE id=:rid AND (customer_id=:cid OR :cid IS NULL)"),
+            {"rid": reply_id, "cid": current_user.customer_id},
+        )
         db.commit()
         return {"status": "ok"}
     except Exception as e:

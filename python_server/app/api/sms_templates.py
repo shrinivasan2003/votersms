@@ -73,11 +73,10 @@ def update_sms_template(
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
-        old_row = db.execute(text(f"SELECT * FROM sms_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id}).fetchone()
+        old_row = db.execute(text("SELECT * FROM sms_templates WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id}).fetchone()
         old_vals = dict(old_row._mapping) if old_row else None
         db.execute(
-            text(f"UPDATE sms_templates SET code=:code, name=:name, body=:body, status=:status WHERE {where}"),
+            text("UPDATE sms_templates SET code=:code, name=:name, body=:body, status=:status WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
             {"code": req.get('code'), "name": req.get('name'), "body": req.get('body'),
              "status": req.get('status'), "id": id, "cid": current_user.customer_id},
         )
@@ -96,10 +95,9 @@ def delete_sms_template(
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
-        old_row = db.execute(text(f"SELECT * FROM sms_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id}).fetchone()
+        old_row = db.execute(text("SELECT * FROM sms_templates WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id}).fetchone()
         old_vals = dict(old_row._mapping) if old_row else None
-        db.execute(text(f"DELETE FROM sms_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id})
+        db.execute(text("DELETE FROM sms_templates WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id})
         db.commit()
         cid = (old_vals or {}).get('customer_id') or current_user.customer_id
         name = (old_vals or {}).get('name')

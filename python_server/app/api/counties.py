@@ -61,9 +61,8 @@ def update_county(
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
         db.execute(
-            text(f"UPDATE counties SET code=:code, name=:name, state=:state, status=:status WHERE {where}"),
+            text("UPDATE counties SET code=:code, name=:name, state=:state, status=:status WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
             {"code": req.get('code'), "name": req.get('name'), "state": req.get('state'),
              "status": req.get('status'), "id": id, "cid": current_user.customer_id},
         )
@@ -80,8 +79,7 @@ def delete_county(
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
-        db.execute(text(f"DELETE FROM counties WHERE {where}"), {"id": id, "cid": current_user.customer_id})
+        db.execute(text("DELETE FROM counties WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id})
         db.commit()
         return {"message": "Deleted successfully"}
     except Exception as e:

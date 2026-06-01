@@ -25,9 +25,7 @@ def get_sms_jobs(
     current_user = Depends(get_current_user),
 ):
     try:
-        cid_filter = "WHERE j.customer_id=:cid" if getattr(current_user, 'customer_id', None) else ""
-        params = {"cid": current_user.customer_id} if getattr(current_user, 'customer_id', None) else {}
-        result = db.execute(text(f"""
+        result = db.execute(text("""
             SELECT j.*,
                 p.name   AS precinct_name,
                 t.name   AS template_name,
@@ -61,9 +59,9 @@ def get_sms_jobs(
             LEFT JOIN sms_providers pr ON j.provider_id = pr.id
             LEFT JOIN contact_lists cl ON j.list_id     = cl.id
             LEFT JOIN voters        v  ON j.voter_id    = v.id
-            {cid_filter}
+            WHERE (:cid IS NULL OR j.customer_id = :cid)
             ORDER BY j.id DESC
-        """), params)
+        """), {"cid": current_user.customer_id})
         return [dict(row._mapping) for row in result]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

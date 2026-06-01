@@ -25,9 +25,7 @@ def get_whatsapp_jobs(
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        cid_filter = "WHERE j.customer_id=:cid" if current_user.customer_id else ""
-        params = {"cid": current_user.customer_id} if current_user.customer_id else {}
-        result = db.execute(text(f"""
+        result = db.execute(text("""
             SELECT j.*,
                 p.name   AS precinct_name,
                 t.name   AS template_name,
@@ -61,9 +59,9 @@ def get_whatsapp_jobs(
             LEFT JOIN whatsapp_providers pr ON j.provider_id = pr.id
             LEFT JOIN contact_lists      cl ON j.list_id     = cl.id
             LEFT JOIN voters             v  ON j.voter_id    = v.id
-            {cid_filter}
+            WHERE (:cid IS NULL OR j.customer_id = :cid)
             ORDER BY j.id DESC
-        """), params)
+        """), {"cid": current_user.customer_id})
         return [dict(row._mapping) for row in result]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -141,10 +139,9 @@ def delete_whatsapp_job(
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
-        old_row = db.execute(text(f"SELECT * FROM whatsapp_jobs WHERE {where}"), {"id": id, "cid": current_user.customer_id}).fetchone()
+        old_row = db.execute(text("SELECT * FROM whatsapp_jobs WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id}).fetchone()
         old_vals = dict(old_row._mapping) if old_row else None
-        db.execute(text(f"DELETE FROM whatsapp_jobs WHERE {where}"), {"id": id, "cid": current_user.customer_id})
+        db.execute(text("DELETE FROM whatsapp_jobs WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id})
         db.commit()
         cid = (old_vals or {}).get('customer_id') or current_user.customer_id
         log_audit(db, cid, 'whatsapp_job', id, (old_vals or {}).get('name'), 'DELETE', current_user, old_values=old_vals)
