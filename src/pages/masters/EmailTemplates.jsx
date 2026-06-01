@@ -68,17 +68,20 @@ const EmailTemplates = () => {
 
   const handleAdd = () => {
     setEditingRow(null);
+    setFormat('Plain Text');
     setView('add');
   };
 
   const handleEdit = (row) => {
     setEditingRow(row);
+    setFormat(row.type === 'HTML' ? 'HTML' : 'Plain Text');
     setView('add');
   };
 
   const handleBack = () => {
     setView('list');
     setEditingRow(null);
+    setFormat('Plain Text');
   };
 
   // Called by NadiaAI when user clicks "Use This Template"

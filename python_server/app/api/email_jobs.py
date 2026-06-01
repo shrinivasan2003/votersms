@@ -51,12 +51,13 @@ def create_email_template(
 
         result = db.execute(
             text("INSERT INTO email_templates "
-                 "(code, name, subject, body, status, customer_id, created_by, cc, bcc, reply_to) "
-                 "VALUES (:code, :name, :subject, :body, :status, :customer_id, :created_by, :cc, :bcc, :reply_to)"),
+                 "(code, name, subject, body, status, customer_id, created_by, cc, bcc, reply_to, type) "
+                 "VALUES (:code, :name, :subject, :body, :status, :customer_id, :created_by, :cc, :bcc, :reply_to, :type)"),
             {"code": req.get('code'), "name": req.get('name'), "subject": req.get('subject'),
              "body": req.get('body'), "status": req.get('status', 'Active'),
              "customer_id": current_user.customer_id, "created_by": current_user.id,
-             "cc": req.get('cc') or None, "bcc": req.get('bcc') or None, "reply_to": req.get('reply_to') or None},
+             "cc": req.get('cc') or None, "bcc": req.get('bcc') or None, "reply_to": req.get('reply_to') or None,
+             "type": req.get('type', 'Plain Text')},
         )
         db.commit()
         new_id = result.lastrowid
@@ -79,10 +80,11 @@ def update_email_template(
         old_row = db.execute(text("SELECT * FROM email_templates WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id}).fetchone()
         old_vals = dict(old_row._mapping) if old_row else None
         db.execute(
-            text("UPDATE email_templates SET code=:code, name=:name, subject=:subject, body=:body, status=:status, cc=:cc, bcc=:bcc, reply_to=:reply_to WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+            text("UPDATE email_templates SET code=:code, name=:name, subject=:subject, body=:body, status=:status, cc=:cc, bcc=:bcc, reply_to=:reply_to, type=:type WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
             {"code": req.get('code'), "name": req.get('name'), "subject": req.get('subject'),
              "body": req.get('body'), "status": req.get('status'), "id": id, "cid": current_user.customer_id,
-             "cc": req.get('cc') or None, "bcc": req.get('bcc') or None, "reply_to": req.get('reply_to') or None},
+             "cc": req.get('cc') or None, "bcc": req.get('bcc') or None, "reply_to": req.get('reply_to') or None,
+             "type": req.get('type', 'Plain Text')},
         )
         db.commit()
         cid = (old_vals or {}).get('customer_id') or current_user.customer_id
