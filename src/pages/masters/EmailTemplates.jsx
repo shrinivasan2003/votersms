@@ -269,7 +269,7 @@ const EmailTemplates = () => {
                   <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600 text-xs">1.</button>
                   <div className="w-px h-6 bg-gray-200 mx-1" />
                   <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600">🔗</button>
-                  <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600">🔗<span className="text-[10px] absolute mt-2 ml-1">✕</span></button>
+                  <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600 relative">🔗<span className="text-[10px] absolute top-0 right-0">✕</span></button>
                   <div className="w-px h-6 bg-gray-200 mx-1" />
                   <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600 text-xs font-medium">Clear</button>
                 </div>
