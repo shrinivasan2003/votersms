@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Users, FileText, BarChart2, UserCheck,
+  Users, FileText, BarChart2,
   Upload, Circle, Filter, MessageSquare, Mail, MessageCircle,
   CheckCircle2, XCircle, Loader2, Clock, UserPlus, ChevronDown, Send,
+  Settings2, WifiOff,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -133,6 +134,64 @@ const CampaignDropdown = () => {
   );
 };
 
+// ── Providers Activated card ──────────────────────────────────────────────────
+
+const PROVIDER_META = [
+  { key: 'sms',      label: 'SMS',      Icon: MessageSquare, color: '#6366F1', bg: 'bg-indigo-50',  text: 'text-indigo-600',  border: 'border-indigo-200'  },
+  { key: 'email',    label: 'Email',    Icon: Mail,          color: '#3B82F6', bg: 'bg-blue-50',    text: 'text-blue-600',    border: 'border-blue-200'    },
+  { key: 'whatsapp', label: 'WhatsApp', Icon: MessageCircle, color: '#10B981', bg: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-200' },
+];
+
+const ProvidersCard = ({ providers = {}, onClick }) => {
+  const activeList  = PROVIDER_META.filter(p => providers[p.key]);
+  const activeCount = activeList.length;
+
+  return (
+    <div
+      onClick={onClick}
+      className="bg-white rounded-xl shadow-sm border border-brand-border p-4 sm:p-5
+        hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group"
+    >
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+            style={{ backgroundColor: '#f0f4ff' }}>
+            <Settings2 size={17} style={{ color: '#4F46E5' }} />
+          </div>
+          <span className="text-xs font-bold text-brand-textSecondary uppercase tracking-wider">
+            Providers Active
+          </span>
+        </div>
+        <span className={`text-xl font-extrabold tabular-nums ${activeCount > 0 ? 'text-brand-navy' : 'text-gray-300'}`}>
+          {activeCount}/3
+        </span>
+      </div>
+
+      {/* Provider badges */}
+      {activeCount > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {activeList.map(({ key, label, Icon, bg, text, border }) => (
+            <span
+              key={key}
+              className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold
+                border ${bg} ${text} ${border}`}
+            >
+              <Icon size={11} />
+              {label}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+          <WifiOff size={13} />
+          <span>No providers configured</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 const Dashboard = () => {
@@ -144,8 +203,8 @@ const Dashboard = () => {
     smsTemplates: 0,
     smsJobs: 0,
     emailJobs: 0,
-    activeUsers: 0,
     whatsappJobs: 0,
+    activeProviders: { sms: false, email: false, whatsapp: false },
   });
   const [recentJobs, setRecentJobs] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
@@ -256,12 +315,12 @@ const Dashboard = () => {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6">
-        <StatCard title="Recipients" value={stats.voters?.toString() || '0'} icon={Users} colorClass="#8B5CF6" />
-        <StatCard title="SMS Templates" value={stats.smsTemplates?.toString() || '0'} icon={FileText} colorClass="#F59E0B" />
-        <StatCard title="SMS Jobs" value={stats.smsJobs?.toString() || '0'} icon={BarChart2} colorClass="#6366F1" />
-        <StatCard title="Email Jobs" value={stats.emailJobs?.toString() || '0'} icon={Mail} colorClass="#3B82F6" />
-        <StatCard title="WhatsApp Jobs" value={stats.whatsappJobs?.toString() || '0'} icon={MessageCircle} colorClass="#10B981" />
-        <StatCard title="Active Users" value={stats.activeUsers?.toString() || '0'} icon={UserCheck} colorClass="#EC4899" />
+        <StatCard title="Recipients"   value={stats.voters?.toString()       || '0'} icon={Users}          colorClass="#8B5CF6" onClick={() => navigate('/recipients')}        />
+        <StatCard title="SMS Templates" value={stats.smsTemplates?.toString() || '0'} icon={FileText}        colorClass="#F59E0B" onClick={() => navigate('/sms-templates')}      />
+        <StatCard title="SMS Jobs"      value={stats.smsJobs?.toString()      || '0'} icon={BarChart2}       colorClass="#6366F1" onClick={() => navigate('/sms-jobs')}          />
+        <StatCard title="Email Jobs"    value={stats.emailJobs?.toString()    || '0'} icon={Mail}            colorClass="#3B82F6" onClick={() => navigate('/email-jobs')}        />
+        <StatCard title="WhatsApp Jobs" value={stats.whatsappJobs?.toString() || '0'} icon={MessageCircle}   colorClass="#10B981" onClick={() => navigate('/whatsapp-jobs')}     />
+        <ProvidersCard providers={stats.activeProviders} onClick={() => navigate('/configuration')} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">

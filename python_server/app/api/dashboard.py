@@ -21,14 +21,18 @@ def get_dashboard_stats(
     if cid is not None:
         params = {"cid": cid}
         queries = {
-            "voters":           "SELECT COUNT(*) FROM voters          WHERE customer_id=:cid",
-            "smsTemplates":     "SELECT COUNT(*) FROM sms_templates   WHERE customer_id=:cid",
-            "emailTemplates":   "SELECT COUNT(*) FROM email_templates  WHERE customer_id=:cid",
+            "voters":           "SELECT COUNT(*) FROM voters             WHERE customer_id=:cid",
+            "smsTemplates":     "SELECT COUNT(*) FROM sms_templates      WHERE customer_id=:cid",
+            "emailTemplates":   "SELECT COUNT(*) FROM email_templates    WHERE customer_id=:cid",
             "whatsappTemplates":"SELECT COUNT(*) FROM whatsapp_templates WHERE customer_id=:cid",
-            "smsJobs":          "SELECT COUNT(*) FROM sms_jobs        WHERE customer_id=:cid",
-            "emailJobs":        "SELECT COUNT(*) FROM email_jobs      WHERE customer_id=:cid",
-            "whatsappJobs":     "SELECT COUNT(*) FROM whatsapp_jobs   WHERE customer_id=:cid",
-            "activeUsers":      "SELECT COUNT(*) FROM users           WHERE customer_id=:cid AND status='Active'",
+            "smsJobs":          "SELECT COUNT(*) FROM sms_jobs           WHERE customer_id=:cid",
+            "emailJobs":        "SELECT COUNT(*) FROM email_jobs         WHERE customer_id=:cid",
+            "whatsappJobs":     "SELECT COUNT(*) FROM whatsapp_jobs      WHERE customer_id=:cid",
+        }
+        provider_queries = {
+            "sms":      "SELECT COUNT(*) FROM sms_providers      WHERE customer_id=:cid AND status='Active'",
+            "email":    "SELECT COUNT(*) FROM email_providers    WHERE customer_id=:cid AND status='Active'",
+            "whatsapp": "SELECT COUNT(*) FROM whatsapp_providers WHERE customer_id=:cid AND status='Active'",
         }
     else:
         params = {}
@@ -40,12 +44,23 @@ def get_dashboard_stats(
             "smsJobs":          "SELECT COUNT(*) FROM sms_jobs",
             "emailJobs":        "SELECT COUNT(*) FROM email_jobs",
             "whatsappJobs":     "SELECT COUNT(*) FROM whatsapp_jobs",
-            "activeUsers":      "SELECT COUNT(*) FROM users WHERE status='Active'",
+        }
+        provider_queries = {
+            "sms":      "SELECT COUNT(*) FROM sms_providers      WHERE status='Active'",
+            "email":    "SELECT COUNT(*) FROM email_providers    WHERE status='Active'",
+            "whatsapp": "SELECT COUNT(*) FROM whatsapp_providers WHERE status='Active'",
         }
 
     stats = {}
     for key, sql in queries.items():
         stats[key] = db.execute(text(sql), params).scalar() or 0
+
+    # Returns { sms: true/false, email: true/false, whatsapp: true/false }
+    stats["activeProviders"] = {
+        key: (db.execute(text(sql), params).scalar() or 0) > 0
+        for key, sql in provider_queries.items()
+    }
+
     return stats
 
 
