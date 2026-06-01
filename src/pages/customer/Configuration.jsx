@@ -7,26 +7,8 @@ import {
 import SmsProviders from '../masters/SmsProviders';
 import EmailProviders from '../masters/EmailProviders';
 import WhatsappProviders from '../masters/WhatsappProviders';
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-function getToken() {
-  return localStorage.getItem('auth_token') || '';
-}
-
-async function apiFetch(path, options = {}) {
-  const res = await fetch(`/api${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${getToken()}`,
-      ...(options.headers || {}),
-    },
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
-  return data;
-}
+import { aiApi } from '../../api/ai';
+import { customersApi } from '../../api/customers';
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
 
@@ -107,8 +89,8 @@ const NadiaAISettings = () => {
 
   useEffect(() => {
     Promise.all([
-      apiFetch('/ai/config').catch(() => null),
-      apiFetch('/ai/usage').catch(() => null),
+      aiApi.getConfig().catch(() => null),
+      aiApi.getUsage().catch(() => null),
     ]).then(([cfg, usg]) => {
       if (cfg) {
         setProvider(cfg.provider || 'deepseek');
@@ -135,15 +117,11 @@ const NadiaAISettings = () => {
     setSaving(true);
     setToast(null);
     try {
-      await apiFetch('/ai/config', {
-        method: 'PUT',
-        body: JSON.stringify({ provider, api_key: apiKey, model }),
-      });
+      await aiApi.saveConfig({ provider, api_key: apiKey, model });
       setToast({ type: 'success', msg: 'AI configuration saved and validated successfully. Nadia AI is ready to use.' });
       setValidatedAt(new Date().toISOString());
       setApiKey('');
-      // Refresh usage
-      apiFetch('/ai/usage').then(setUsage).catch(() => {});
+      aiApi.getUsage().then(setUsage).catch(() => {});
     } catch (err) {
       setToast({ type: 'error', msg: err.message || 'Failed to save configuration.' });
     } finally {
@@ -313,8 +291,7 @@ const GeneralSettings = () => {
   const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
-    fetch('/api/customers/my-settings')
-      .then(r => r.json())
+    customersApi.getMySettings()
       .then(d => {
         setTimezone(d.timezone || 'UTC');
         setOptions(d.timezone_options || {});
@@ -327,15 +304,10 @@ const GeneralSettings = () => {
     setLoading(true);
     setSaved(false);
     try {
-      const res = await fetch('/api/customers/my-settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ timezone }),
-      });
-      if (res.ok) setSaved(true);
-      else alert((await res.json()).detail || 'Failed to save settings');
-    } catch {
-      alert('Network error');
+      await customersApi.updateMySettings({ timezone });
+      setSaved(true);
+    } catch (err) {
+      alert(err.message || 'Failed to save settings');
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Pencil, Trash2, ChevronDown } from 'lucide-react';
+import { permissionsApi, rolesApi } from '../../api/users';
 
 const Permissions = () => {
   const [view, setView] = useState('list'); // 'list' or 'add'
@@ -9,14 +10,10 @@ const Permissions = () => {
   const [editingRow, setEditingRow] = useState(null);
   const [selectedRoleIds, setSelectedRoleIds] = useState([]);
 
-  const API_URL = '/api/permissions';
-  const ROLES_API = '/api/roles';
-
   const fetchPermissions = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL);
-      const data = await res.json();
+      const data = await permissionsApi.list();
       setPermissions(Array.isArray(data) ? data : []);
     } catch (err) {
     } finally {
@@ -26,8 +23,7 @@ const Permissions = () => {
 
   const fetchRoles = async () => {
     try {
-      const res = await fetch(ROLES_API);
-      const data = await res.json();
+      const data = await rolesApi.list();
       setRoles(Array.isArray(data) ? data : []);
     } catch (err) {
     }
@@ -61,20 +57,14 @@ const Permissions = () => {
     };
 
     try {
-      const method = editingRow ? 'PUT' : 'POST';
-      const url = editingRow ? `${API_URL}/${editingRow.id}` : API_URL;
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-
-      if (res.ok) {
-        alert(`Permission ${editingRow ? 'updated' : 'created'} successfully!`);
-        fetchPermissions();
-        handleBack();
+      if (editingRow) {
+        await permissionsApi.update(editingRow.id, data);
+      } else {
+        await permissionsApi.create(data);
       }
+      alert(`Permission ${editingRow ? 'updated' : 'created'} successfully!`);
+      fetchPermissions();
+      handleBack();
     } catch (err) {
     }
   };
@@ -82,8 +72,7 @@ const Permissions = () => {
   const handleEdit = async (perm) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/${perm.id}`);
-      const data = await res.json();
+      const data = await permissionsApi.get(perm.id);
       setEditingRow(data);
       setSelectedRoleIds(data.roleIds || []);
       setView('add');
@@ -94,7 +83,7 @@ const Permissions = () => {
   };
 
   const toggleRole = (roleId) => {
-    setSelectedRoleIds(prev => 
+    setSelectedRoleIds(prev =>
       prev.includes(roleId) ? prev.filter(id => id !== roleId) : [...prev, roleId]
     );
   };
@@ -102,8 +91,8 @@ const Permissions = () => {
   const handleDelete = async (perm) => {
     if (!window.confirm(`Are you sure you want to delete permission ${perm.name}?`)) return;
     try {
-      const res = await fetch(`${API_URL}/${perm.id}`, { method: 'DELETE' });
-      if (res.ok) fetchPermissions();
+      await permissionsApi.remove(perm.id);
+      fetchPermissions();
     } catch (err) {
     }
   };

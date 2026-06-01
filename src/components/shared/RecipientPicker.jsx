@@ -13,6 +13,7 @@
  */
 import { useState, useEffect } from 'react';
 import { ListChecks, User, Search, RefreshCw, X } from 'lucide-react';
+import { votersApi } from '../../api/voters';
 
 const MODES = [
   { key: 'list',       label: 'List',       Icon: ListChecks  },
@@ -45,8 +46,7 @@ export default function RecipientPicker({ lists = [], channel = 'sms', value, on
     const t = setTimeout(async () => {
       setSearching(true);
       try {
-        const res  = await fetch(`/api/voters?search=${encodeURIComponent(voterSearch)}`);
-        const data = await res.json();
+        const data = await votersApi.list({ search: voterSearch });
         setResults(Array.isArray(data) ? data.slice(0, 8) : []);
       } catch { setResults([]); }
       finally  { setSearching(false); }

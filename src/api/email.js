@@ -28,7 +28,8 @@ export const emailRepliesApi = {
 };
 
 export const emailAnalyticsApi = {
-  get: (jobId) => get(`/api/email-analytics/${jobId}`),
+  list: ()       => get('/api/email-analytics'),
+  get: (jobId)   => get(`/api/email-analytics/${jobId}`),
 };
 
 function _qs(params) {

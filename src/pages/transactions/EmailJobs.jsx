@@ -7,6 +7,9 @@ import RecipientPicker from '../../components/shared/RecipientPicker';
 import EmailAnalyticsModal from '../../components/shared/EmailAnalyticsModal';
 import RepeatScheduler, { DEFAULT_REPEAT } from '../../components/shared/RepeatScheduler';
 import { useJobPolling } from '../../hooks/useJobPolling';
+import { emailJobsApi, emailTemplatesApi, emailProvidersApi, emailAnalyticsApi } from '../../api/email';
+import { listsApi } from '../../api/lists';
+import { customersApi } from '../../api/customers';
 
 const RecipientCell = ({ row }) => {
   if (row.voter_name && row.voter_id)
@@ -97,23 +100,17 @@ const EmailJobs = () => {
   // Tab filter for list view
   const [tab, setTab] = useState('all');
 
-  const API_URL = '/api/email-jobs';
-
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [jobsRes, listsRes, templatesRes, providersRes, analyticsRes, settingsRes] = await Promise.all([
-        fetch(API_URL),
-        fetch('/api/contact-lists'),
-        fetch('/api/email-templates'),
-        fetch('/api/email-providers'),
-        fetch('/api/email-analytics'),
-        fetch('/api/customers/my-settings'),
-      ]);
       const [jobsData, listsData, templatesData, providersData, analyticsData, settingsData] = await Promise.all([
-        jobsRes.json(), listsRes.json(), templatesRes.json(), providersRes.json(), analyticsRes.json(), settingsRes.json(),
+        emailJobsApi.list(),
+        listsApi.list(),
+        emailTemplatesApi.list(),
+        emailProvidersApi.list(),
+        emailAnalyticsApi.list().catch(() => []),
+        customersApi.getMySettings(),
       ]);
-      // Update customer timezone
       if (settingsData?.timezone) {
         setCustomerTz(settingsData.timezone);
         setTzShort(settingsData.timezone_short?.[settingsData.timezone] || settingsData.timezone);
@@ -135,8 +132,7 @@ const EmailJobs = () => {
 
   const refreshJobs = useCallback(async () => {
     try {
-      const res  = await fetch(API_URL);
-      const data = await res.json();
+      const data = await emailJobsApi.list();
       if (Array.isArray(data)) setJobs(data);
     } catch { /* silent */ }
   }, []);
@@ -219,8 +215,8 @@ const EmailJobs = () => {
   const handleDelete = async (row) => {
     if (!window.confirm(`Delete job #${row.id}?`)) return;
     try {
-      const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
-      if (res.ok) fetchData();
+      await emailJobsApi.remove(row.id);
+      fetchData();
     } catch (_err) { }
   };
 
@@ -258,14 +254,10 @@ const EmailJobs = () => {
     };
 
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) { fetchData(); handleBack(); }
-      else alert((await res.json()).detail || 'Failed to create job');
-    } catch (_err) { }
+      await emailJobsApi.create(data);
+      fetchData();
+      handleBack();
+    } catch (err) { alert(err.message || 'Failed to create job'); }
   };
 
   // ── Create form ───────────────────────────────────────────────────────────

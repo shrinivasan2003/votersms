@@ -7,6 +7,7 @@ import Badge from '../../components/shared/Badge';
 import Modal from '../../components/shared/Modal';
 import Lists from './Lists';
 import { Download, Upload, Users, ListChecks, FileSpreadsheet } from 'lucide-react';
+import { votersApi, precinctsApi } from '../../api/voters';
 
 // ── Proper CSV parser (handles quoted fields with commas) ─────────────────────
 function parseCSV(text) {
@@ -114,13 +115,10 @@ const Voters = () => {
   const [precincts, setPrecincts] = useState([]);
   const fileInputRef = useRef(null);
 
-  const API_URL = '/api/voters';
-
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL);
-      const data = await res.json();
+      const data = await votersApi.list();
       setVoters(Array.isArray(data) ? data : []);
     } catch (err) {
     } finally {
@@ -130,8 +128,7 @@ const Voters = () => {
 
   const fetchPrecincts = async () => {
     try {
-      const res = await fetch('/api/precincts');
-      const data = await res.json();
+      const data = await precinctsApi.list();
       setPrecincts(Array.isArray(data) ? data : []);
     } catch { /* ignore */ }
   };
@@ -174,14 +171,13 @@ const Voters = () => {
     };
 
     try {
-      const method = editingRow ? 'PUT' : 'POST';
-      const url    = editingRow ? `${API_URL}/${editingRow.id}` : API_URL;
-      const res    = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      if (res.ok) { fetchData(); handleBack(); }
+      if (editingRow) {
+        await votersApi.update(editingRow.id, data);
+      } else {
+        await votersApi.create(data);
+      }
+      fetchData();
+      handleBack();
     } catch (err) {
     }
   };
@@ -189,8 +185,8 @@ const Voters = () => {
   const handleDelete = async (row) => {
     if (!window.confirm(`Are you sure you want to delete recipient ${row.first_name} ${row.last_name}?`)) return;
     try {
-      const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
-      if (res.ok) fetchData();
+      await votersApi.remove(row.id);
+      fetchData();
     } catch (err) {
     }
   };
@@ -218,28 +214,16 @@ const Voters = () => {
         setIsUploading(false);
         return;
       }
-      const res    = await fetch(`${API_URL}/bulk`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(rows),
-      });
-      const result = await res.json();
-      if (res.ok) {
-        const msg = [
-          `✅ Successfully uploaded ${result.inserted} recipient(s).`,
-          result.skipped  > 0 ? `⚠️ ${result.skipped} empty row(s) skipped.`  : '',
-          result.failed   > 0 ? `❌ ${result.failed} row(s) failed to insert.` : '',
-        ].filter(Boolean).join('\n');
-        alert(msg);
-        setIsUploadModalOpen(false);
-        setSelectedFile(null);
-        fetchData();
-      } else {
-        // FastAPI returns { detail: "..." } or { detail: { message: "..." } }
-        const detail = result.detail;
-        const msg = (typeof detail === 'object' ? detail?.message : detail) || 'Upload failed. Please check the file format.';
-        alert(msg);
-      }
+      const result = await votersApi.bulkUpload(rows);
+      const msg = [
+        `✅ Successfully uploaded ${result.inserted} recipient(s).`,
+        result.skipped > 0 ? `⚠️ ${result.skipped} empty row(s) skipped.`  : '',
+        result.failed  > 0 ? `❌ ${result.failed} row(s) failed to insert.` : '',
+      ].filter(Boolean).join('\n');
+      alert(msg);
+      setIsUploadModalOpen(false);
+      setSelectedFile(null);
+      fetchData();
     } catch (err) {
       alert(`Upload error: ${err.message}`);
     } finally {

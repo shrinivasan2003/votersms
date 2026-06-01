@@ -4,6 +4,9 @@ import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
 import RecipientPicker from '../../components/shared/RecipientPicker';
 import { useJobPolling } from '../../hooks/useJobPolling';
+import { whatsappJobsApi, whatsappTemplatesApi, whatsappProvidersApi } from '../../api/whatsapp';
+import { listsApi } from '../../api/lists';
+import { customersApi } from '../../api/customers';
 
 // Parse a UTC datetime string from DB (may lack 'Z') as a proper UTC Date
 const parseUTC = (str) => {
@@ -52,20 +55,15 @@ const WhatsappJobs = () => {
   const [customerTz, setCustomerTz] = useState('UTC');
   const [tzShort, setTzShort]       = useState('UTC');
 
-  const API_URL = '/api/whatsapp-jobs';
-
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [jobsRes, listsRes, templatesRes, providersRes, settingsRes] = await Promise.all([
-        fetch(API_URL),
-        fetch('/api/contact-lists'),
-        fetch('/api/whatsapp-templates'),
-        fetch('/api/whatsapp-providers'),
-        fetch('/api/customers/my-settings'),
-      ]);
       const [jobsData, listsData, templatesData, providersData, settingsData] = await Promise.all([
-        jobsRes.json(), listsRes.json(), templatesRes.json(), providersRes.json(), settingsRes.json(),
+        whatsappJobsApi.list(),
+        listsApi.list(),
+        whatsappTemplatesApi.list(),
+        whatsappProvidersApi.list(),
+        customersApi.getMySettings(),
       ]);
       setJobs(Array.isArray(jobsData)           ? jobsData      : []);
       setLists(Array.isArray(listsData)         ? listsData     : []);
@@ -81,11 +79,9 @@ const WhatsappJobs = () => {
     }
   };
 
-  // Silent refresh — only re-fetches the jobs list (no loading spinner)
   const refreshJobs = useCallback(async () => {
     try {
-      const res = await fetch(API_URL);
-      const data = await res.json();
+      const data = await whatsappJobsApi.list();
       if (Array.isArray(data)) setJobs(data);
     } catch { /* silent */ }
   }, []);
@@ -123,8 +119,8 @@ const WhatsappJobs = () => {
   const handleDelete = async (row) => {
     if (!window.confirm(`Delete WhatsApp job #${row.id}?`)) return;
     try {
-      const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
-      if (res.ok) fetchData();
+      await whatsappJobsApi.remove(row.id);
+      fetchData();
     } catch (_err) { }
   };
 
@@ -151,14 +147,10 @@ const WhatsappJobs = () => {
     };
 
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) { fetchData(); handleBack(); }
-      else alert((await res.json()).detail || 'Failed to create job');
-    } catch (_err) { }
+      await whatsappJobsApi.create(data);
+      fetchData();
+      handleBack();
+    } catch (err) { alert(err.message || 'Failed to create job'); }
   };
 
   /* ── Create form ── */

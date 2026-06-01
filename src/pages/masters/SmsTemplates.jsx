@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { smsTemplatesApi } from '../../api/sms';
 import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import FormInput from '../../components/shared/FormInput';
@@ -12,13 +13,11 @@ const SmsTemplates = () => {
   const bodyRef = useRef(null);
   const [loading, setLoading] = useState(false);
 
-  const API_URL = '/api/sms-templates';
 
   const fetchTemplates = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL);
-      const data = await res.json();
+      const data = await smsTemplatesApi.list();
       setTemplates(Array.isArray(data) ? data : []);
     } catch (err) {
     } finally {
@@ -77,19 +76,13 @@ const SmsTemplates = () => {
     };
 
     try {
-      const method = editingRow ? 'PUT' : 'POST';
-      const url = editingRow ? `${API_URL}/${editingRow.id}` : API_URL;
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-
-      if (res.ok) {
-        fetchTemplates();
-        handleBack();
+      if (editingRow) {
+        await smsTemplatesApi.update(editingRow.id, data);
+      } else {
+        await smsTemplatesApi.create(data);
       }
+      fetchTemplates();
+      handleBack();
     } catch (err) {
     }
   };
@@ -98,8 +91,8 @@ const SmsTemplates = () => {
     if (!window.confirm(`Are you sure you want to delete ${row.name}?`)) return;
     
     try {
-      const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
-      if (res.ok) fetchTemplates();
+      await smsTemplatesApi.remove(row.id);
+      fetchTemplates();
     } catch (err) {
     }
   };

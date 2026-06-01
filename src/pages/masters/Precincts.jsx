@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { precinctsApi, countiesApi } from '../../api/voters';
 import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import FormInput from '../../components/shared/FormInput';
@@ -10,17 +11,13 @@ const Precincts = () => {
   const [counties, setCounties] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const API_URL = '/api/precincts';
-
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [precinctsRes, countiesRes] = await Promise.all([
-        fetch('/api/precincts-detailed'),
-        fetch('/api/counties')
+      const [precinctsData, countiesData] = await Promise.all([
+        precinctsApi.detailed(),
+        countiesApi.list(),
       ]);
-      const precinctsData = await precinctsRes.json();
-      const countiesData = await countiesRes.json();
       setPrecincts(Array.isArray(precinctsData) ? precinctsData : []);
       setCounties(Array.isArray(countiesData) ? countiesData : []);
     } catch (err) {
@@ -66,19 +63,13 @@ const Precincts = () => {
     };
 
     try {
-      const method = editingRow ? 'PUT' : 'POST';
-      const url = editingRow ? `${API_URL}/${editingRow.id}` : API_URL;
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-
-      if (res.ok) {
-        fetchData();
-        handleBack();
+      if (editingRow) {
+        await precinctsApi.update(editingRow.id, data);
+      } else {
+        await precinctsApi.create(data);
       }
+      fetchData();
+      handleBack();
     } catch (err) {
     }
   };
@@ -86,8 +77,8 @@ const Precincts = () => {
   const handleDelete = async (row) => {
     if (!window.confirm(`Are you sure you want to delete precinct ${row.name}?`)) return;
     try {
-      const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
-      if (res.ok) fetchData();
+      await precinctsApi.remove(row.id);
+      fetchData();
     } catch (err) {
     }
   };

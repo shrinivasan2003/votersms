@@ -5,26 +5,7 @@ import {
   CheckCircle, AlertCircle, Copy, Check, Sparkles,
 } from 'lucide-react';
 import nadiaAvatar from '../../assets/nadia-avatar.jpg';
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-function getToken() {
-  return localStorage.getItem('auth_token') || '';
-}
-
-async function apiFetch(path, options = {}) {
-  const res = await fetch(`/api${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${getToken()}`,
-      ...(options.headers || {}),
-    },
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
-  return data;
-}
+import { aiApi } from '../../api/ai';
 
 // ── Usage badge ───────────────────────────────────────────────────────────────
 
@@ -190,7 +171,7 @@ const NadiaAI = ({ availableVariables = [], onUseTemplate }) => {
   // Fetch usage when panel opens
   useEffect(() => {
     if (!open) return;
-    apiFetch('/ai/usage').then(setUsage).catch(() => {});
+    aiApi.getUsage().then(setUsage).catch(() => {});
   }, [open]);
 
   const handleGenerate = async () => {
@@ -200,13 +181,10 @@ const NadiaAI = ({ availableVariables = [], onUseTemplate }) => {
     setLoading(true);
     setNoConfig(false);
     try {
-      const res = await apiFetch('/ai/generate-email-template', {
-        method: 'POST',
-        body: JSON.stringify({
-          context,
-          available_variables: availableVariables,
-          format,
-        }),
+      const res = await aiApi.generateEmail({
+        context,
+        available_variables: availableVariables,
+        format,
       });
       setVariations(res.variations || []);
       if (res.usage) setUsage(u => ({ ...u, ...res.usage }));

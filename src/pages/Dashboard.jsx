@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { dashboardApi } from '../api/dashboard';
 import StatCard from '../components/shared/StatCard';
 import Button from '../components/shared/Button';
 import Pagination from '../components/shared/Pagination';
@@ -40,14 +41,14 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsRes, recentRes, activityRes] = await Promise.all([
-          fetch('/api/dashboard-stats'),
-          fetch('/api/recent-jobs'),
-          fetch('/api/recent-activity'),
+        const [statsData, recentData, activityData] = await Promise.all([
+          dashboardApi.stats(),
+          dashboardApi.recentJobs(),
+          dashboardApi.recentActivity(),
         ]);
-        if (statsRes.ok) setStats(await statsRes.json());
-        if (recentRes.ok) setRecentJobs(await recentRes.json());
-        if (activityRes.ok) setRecentActivity(await activityRes.json());
+        if (statsData)    setStats(statsData);
+        if (recentData)   setRecentJobs(recentData);
+        if (activityData) setRecentActivity(activityData);
       } catch (err) {
       }
     };

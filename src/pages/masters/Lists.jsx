@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { ListChecks, Plus, Users, Upload, Download, ArrowLeft, Trash2, Search, X, Star, Edit2, RefreshCw, UserPlus, Check, Tag, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Badge from '../../components/shared/Badge';
+import { listsApi } from '../../api/lists';
+import { votersApi } from '../../api/voters';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-GB') : '—';
@@ -56,12 +58,10 @@ const Lists = () => {
   const fetchLists = async () => {
     setLoading(true);
     try {
-      const [listsRes, masterRes] = await Promise.all([
-        fetch('/api/contact-lists'),
-        fetch('/api/contact-lists/master-count'),
+      const [listsData, masterData] = await Promise.all([
+        listsApi.list(),
+        listsApi.masterCount(),
       ]);
-      const listsData = await listsRes.json();
-      const masterData = await masterRes.json();
       setLists(Array.isArray(listsData) ? listsData : []);
       setMasterCount(masterData.count || 0);
     } catch (err) {
@@ -73,8 +73,7 @@ const Lists = () => {
   const fetchMembers = async (listId) => {
     setMembersLoading(true);
     try {
-      const res = await fetch(`/api/contact-lists/${listId}/members`);
-      const data = await res.json();
+      const data = await listsApi.members(listId);
       setMembers(Array.isArray(data) ? data : []);
     } catch (err) {
     } finally {
@@ -84,8 +83,7 @@ const Lists = () => {
 
   const fetchMetaTags = async (listId) => {
     try {
-      const res = await fetch(`/api/contact-lists/${listId}/meta-tags`);
-      const data = await res.json();
+      const data = await listsApi.metaTags(listId);
       setMetaTags(Array.isArray(data) ? data : []);
     } catch (err) {
     }
@@ -99,8 +97,7 @@ const Lists = () => {
     const timer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const res = await fetch(`/api/voters?search=${encodeURIComponent(memberSearch)}`);
-        const data = await res.json();
+        const data = await votersApi.list({ search: memberSearch });
         setSearchResults(Array.isArray(data) ? data.slice(0, 8) : []);
       } catch {
         setSearchResults([]);
@@ -126,9 +123,7 @@ const Lists = () => {
     setIsAddTagOpen(false);
     setNewTagLabel('');
     setDefaultVoters([]);
-    // Pre-load recipients so the user sees something to pick from immediately
-    fetch('/api/voters')
-      .then(r => r.json())
+    votersApi.list()
       .then(data => setDefaultVoters(Array.isArray(data) ? data.slice(0, 15) : []))
       .catch(() => {});
   };
@@ -146,18 +141,14 @@ const Lists = () => {
     e.preventDefault();
     setSaving(true);
     try {
-      const method = editingList ? 'PUT' : 'POST';
-      const url = editingList ? `/api/contact-lists/${editingList.id}` : '/api/contact-lists';
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
-      if (res.ok) {
-        await fetchLists();
-        setView('list');
-        setEditingList(null);
+      if (editingList) {
+        await listsApi.update(editingList.id, form);
+      } else {
+        await listsApi.create(form);
       }
+      await fetchLists();
+      setView('list');
+      setEditingList(null);
     } catch (err) {
     } finally {
       setSaving(false);
@@ -168,7 +159,7 @@ const Lists = () => {
     e.stopPropagation();
     if (!window.confirm('Delete this list and remove all its members?')) return;
     try {
-      await fetch(`/api/contact-lists/${id}`, { method: 'DELETE' });
+      await listsApi.remove(id);
       fetchLists();
     } catch (err) {
     }
@@ -177,17 +168,7 @@ const Lists = () => {
   const handleAddMember = async (voter) => {
     setAddError('');
     try {
-      const res = await fetch(`/api/contact-lists/${selectedList.id}/members`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ voter_id: voter.id }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setAddError(err.detail || 'Failed to add — recipient may already be in this list.');
-        setTimeout(() => setAddError(''), 4000);
-        return;
-      }
+      await listsApi.addMember(selectedList.id, { voter_id: voter.id });
       setAddMsg(`✓ Added ${voter.first_name} ${voter.last_name}`);
       setMemberSearch('');
       setSearchResults([]);
@@ -195,7 +176,7 @@ const Lists = () => {
       setSelectedList(prev => ({ ...prev, member_count: (prev.member_count || 0) + 1 }));
       setTimeout(() => setAddMsg(''), 3000);
     } catch (err) {
-      setAddError('Connection error. Please try again.');
+      setAddError(err.message || 'Failed to add — recipient may already be in this list.');
       setTimeout(() => setAddError(''), 4000);
     }
   };
@@ -203,7 +184,7 @@ const Lists = () => {
   const handleRemoveMember = async (voterId, name) => {
     if (!window.confirm(`Remove ${name} from this list?`)) return;
     try {
-      await fetch(`/api/contact-lists/${selectedList.id}/members/${voterId}`, { method: 'DELETE' });
+      await listsApi.removeMember(selectedList.id, voterId);
       fetchMembers(selectedList.id);
       setSelectedList(prev => ({ ...prev, member_count: Math.max((prev.member_count || 1) - 1, 0) }));
     } catch (err) {
@@ -227,12 +208,7 @@ const Lists = () => {
       }).filter(r => r.email || r.voter_id);
 
       try {
-        const res = await fetch(`/api/contact-lists/${selectedList.id}/members/bulk`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(rows),
-        });
-        const result = await res.json();
+        const result = await listsApi.bulkImport(selectedList.id, rows);
         const parts = [];
         if (result.added > 0) parts.push(`${result.added} new member(s) added`);
         if (result.updated > 0) parts.push(`${result.updated} existing member(s) updated with new tag values`);
@@ -253,8 +229,7 @@ const Lists = () => {
 
   const handleDownloadTemplate = async () => {
     try {
-      const res = await fetch(`/api/contact-lists/${selectedList.id}/csv-template`);
-      const text = await res.text();
+      const text = await listsApi.csvTemplate(selectedList.id);
       const blob = new Blob([text], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -273,20 +248,12 @@ const Lists = () => {
     if (!label) return;
     setTagSaving(true);
     try {
-      const res = await fetch(`/api/contact-lists/${selectedList.id}/meta-tags`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tag_label: label }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.detail || 'Failed to add tag');
-        return;
-      }
+      await listsApi.saveMetaTag(selectedList.id, { tag_label: label });
       setNewTagLabel('');
       setIsAddTagOpen(false);
       fetchMetaTags(selectedList.id);
     } catch (err) {
+      alert(err.message || 'Failed to add tag');
     } finally {
       setTagSaving(false);
     }
@@ -295,7 +262,7 @@ const Lists = () => {
   const handleDeleteTag = async (tagKey) => {
     if (!window.confirm(`Delete meta tag "{{${tagKey}}}"? This will remove all stored values for this tag.`)) return;
     try {
-      await fetch(`/api/contact-lists/${selectedList.id}/meta-tags/${tagKey}`, { method: 'DELETE' });
+      await listsApi.deleteMetaTag(selectedList.id, tagKey);
       fetchMetaTags(selectedList.id);
     } catch (err) {
     }

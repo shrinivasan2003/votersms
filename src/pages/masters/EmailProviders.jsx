@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
+import { emailProvidersApi } from '../../api/email';
 
 const EmailProviders = () => {
   const [view, setView] = useState('list'); // 'list' or 'add'
@@ -10,13 +11,10 @@ const EmailProviders = () => {
   const [loading, setLoading] = useState(false);
   const [providerType, setProviderType] = useState('SMTP');
 
-  const API_URL = '/api/email-providers';
-
   const fetchProviders = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL);
-      const data = await res.json();
+      const data = await emailProvidersApi.list();
       setProviders(Array.isArray(data) ? data : []);
     } catch (err) {
     } finally {
@@ -88,21 +86,16 @@ const EmailProviders = () => {
     };
 
     try {
-      const method = editingRow ? 'PUT' : 'POST';
-      const url = editingRow ? `${API_URL}/${editingRow.id}` : API_URL;
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-
-      if (res.ok) {
-        alert(`Email Provider ${editingRow ? 'updated' : 'created'} successfully!`);
-        fetchProviders();
-        handleBack();
+      if (editingRow) {
+        await emailProvidersApi.update(editingRow.id, data);
+      } else {
+        await emailProvidersApi.create(data);
       }
+      alert(`Email Provider ${editingRow ? 'updated' : 'created'} successfully!`);
+      fetchProviders();
+      handleBack();
     } catch (err) {
+      alert(`Error: ${err.message || 'Failed to save provider.'}`);
     }
   };
 
@@ -110,8 +103,8 @@ const EmailProviders = () => {
     if (!window.confirm(`Are you sure you want to delete ${row.name}?`)) return;
     
     try {
-      const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
-      if (res.ok) fetchProviders();
+      await emailProvidersApi.remove(row.id);
+      fetchProviders();
     } catch (err) {
     }
   };

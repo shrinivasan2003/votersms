@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { emailTemplatesApi } from '../../api/email';
 import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
@@ -16,13 +17,10 @@ const EmailTemplates = () => {
   const [metaTags, setMetaTags]         = useState([]);   // tags from selected list in ListTagPicker
   const [nadiaFormat, setNadiaFormat]   = useState('Plain Text');
 
-  const API_URL = '/api/email-templates';
-
   const fetchTemplates = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL);
-      const data = await res.json();
+      const data = await emailTemplatesApi.list();
       setTemplates(Array.isArray(data) ? data : []);
     } catch (err) {
     } finally {
@@ -105,19 +103,13 @@ const EmailTemplates = () => {
     };
 
     try {
-      const method = editingRow ? 'PUT' : 'POST';
-      const url = editingRow ? `${API_URL}/${editingRow.id}` : API_URL;
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-
-      if (res.ok) {
-        fetchTemplates();
-        handleBack();
+      if (editingRow) {
+        await emailTemplatesApi.update(editingRow.id, data);
+      } else {
+        await emailTemplatesApi.create(data);
       }
+      fetchTemplates();
+      handleBack();
     } catch (err) {
     }
   };
@@ -126,8 +118,8 @@ const EmailTemplates = () => {
     if (!window.confirm(`Are you sure you want to delete ${row.name}?`)) return;
     
     try {
-      const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
-      if (res.ok) fetchTemplates();
+      await emailTemplatesApi.remove(row.id);
+      fetchTemplates();
     } catch (err) {
     }
   };

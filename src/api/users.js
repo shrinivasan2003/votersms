@@ -18,6 +18,7 @@ export const rolesApi = {
 
 export const permissionsApi = {
   list: ()           => get('/api/permissions'),
+  get: (id)          => get(`/api/permissions/${id}`),
   create: (data)     => post('/api/permissions', data),
   update: (id, data) => put(`/api/permissions/${id}`, data),
   remove: (id)       => del(`/api/permissions/${id}`),

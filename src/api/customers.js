@@ -1,4 +1,4 @@
-import { get, post, patch, del } from './client';
+import { get, post, put, patch, del } from './client';
 import { API } from '../config/constants';
 
 export const customersApi = {
@@ -8,4 +8,6 @@ export const customersApi = {
   activate: (id) => patch(API.CUSTOMER_ACTION(id, 'activate')),
   deactivate: (id) => patch(API.CUSTOMER_ACTION(id, 'deactivate')),
   remove: (id) => del(API.CUSTOMER_DELETE(id)),
+  getMySettings: () => get('/api/customers/my-settings'),
+  updateMySettings: (data) => put('/api/customers/my-settings', data),
 };

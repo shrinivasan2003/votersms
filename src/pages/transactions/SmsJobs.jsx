@@ -32,8 +32,10 @@ import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
 import RecipientPicker from '../../components/shared/RecipientPicker';
-import { useAuth } from '../../contexts/AuthContext';
 import { useJobPolling } from '../../hooks/useJobPolling';
+import { smsJobsApi, smsTemplatesApi, smsProvidersApi } from '../../api/sms';
+import { listsApi } from '../../api/lists';
+import { customersApi } from '../../api/customers';
 
 /* ── helper: display the recipient source in the table ── */
 const RecipientCell = ({ row }) => {
@@ -56,22 +58,16 @@ const SmsJobs = () => {
   const [customerTz, setCustomerTz] = useState('UTC');
   const [tzShort, setTzShort]       = useState('UTC');
   const [repeat, setRepeat]         = useState({ ...DEFAULT_REPEAT });
-  const { getAuthHeaders, user }    = useAuth();
-
-  const API_URL = '/api/sms-jobs';
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [jobsRes, listsRes, templatesRes, providersRes, settingsRes] = await Promise.all([
-        fetch(API_URL),
-        fetch('/api/contact-lists'),
-        fetch('/api/sms-templates'),
-        fetch('/api/sms-providers'),
-        fetch('/api/customers/my-settings'),
-      ]);
       const [jobsData, listsData, templatesData, providersData, settingsData] = await Promise.all([
-        jobsRes.json(), listsRes.json(), templatesRes.json(), providersRes.json(), settingsRes.json(),
+        smsJobsApi.list(),
+        listsApi.list(),
+        smsTemplatesApi.list(),
+        smsProvidersApi.list(),
+        customersApi.getMySettings(),
       ]);
       setJobs(Array.isArray(jobsData)           ? jobsData       : []);
       setLists(Array.isArray(listsData)         ? listsData      : []);
@@ -90,8 +86,7 @@ const SmsJobs = () => {
   // Silent refresh — only re-fetches the jobs list (no loading spinner)
   const refreshJobs = useCallback(async () => {
     try {
-      const res = await fetch(API_URL);
-      const data = await res.json();
+      const data = await smsJobsApi.list();
       if (Array.isArray(data)) setJobs(data);
     } catch { /* silent */ }
   }, []);
@@ -145,10 +140,9 @@ const SmsJobs = () => {
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this job?')) return;
     try {
-      const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE', headers: { ...getAuthHeaders() } });
-      if (res.ok) fetchData();
-      else alert((await res.json()).detail || 'Delete failed');
-    } catch (_err) { }
+      await smsJobsApi.remove(id);
+      fetchData();
+    } catch (err) { alert(err.message || 'Delete failed'); }
   };
 
   const handleSubmit = async (e) => {
@@ -184,14 +178,10 @@ const SmsJobs = () => {
     };
 
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-      if (res.ok) { fetchData(); handleBack(); }
-      else alert((await res.json()).detail || 'Failed to create job');
-    } catch (_err) { }
+      await smsJobsApi.create(data);
+      fetchData();
+      handleBack();
+    } catch (err) { alert(err.message || 'Failed to create job'); }
   };
 
   /* ── Create form ── */

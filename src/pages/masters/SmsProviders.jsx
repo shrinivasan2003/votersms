@@ -3,6 +3,7 @@ import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
 import { Pencil, Trash2, Eye, EyeOff } from 'lucide-react';
+import { smsProvidersApi } from '../../api/sms';
 
 const SmsProviders = () => {
   const [view, setView] = useState('list'); // 'list' or 'add'
@@ -13,13 +14,10 @@ const SmsProviders = () => {
   const [showSid, setShowSid] = useState(false);
   const [showToken, setShowToken] = useState(false);
 
-  const API_URL = '/api/sms-providers';
-
   const fetchProviders = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL);
-      const data = await res.json();
+      const data = await smsProvidersApi.list();
       setProviders(Array.isArray(data) ? data : []);
     } catch (err) {
     } finally {
@@ -78,25 +76,16 @@ const SmsProviders = () => {
     };
 
     try {
-      const method = editingRow ? 'PUT' : 'POST';
-      const url = editingRow ? `${API_URL}/${editingRow.id}` : API_URL;
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-
-      if (res.ok) {
-        alert(`Provider saved successfully!`);
-        fetchProviders();
-        handleBack();
+      if (editingRow) {
+        await smsProvidersApi.update(editingRow.id, data);
       } else {
-        const errData = await res.json();
-        alert(`Error: ${errData.message || 'Failed to save provider. Please check if the Code is unique.'}`);
+        await smsProvidersApi.create(data);
       }
+      alert('Provider saved successfully!');
+      fetchProviders();
+      handleBack();
     } catch (err) {
-      alert('Network error. Please make sure the server is running on port 5000.');
+      alert(`Error: ${err.message || 'Failed to save provider. Please check if the Code is unique.'}`);
     }
   };
 
@@ -104,8 +93,8 @@ const SmsProviders = () => {
     if (!window.confirm(`Are you sure you want to delete ${row.name}?`)) return;
     
     try {
-      const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
-      if (res.ok) fetchProviders();
+      await smsProvidersApi.remove(row.id);
+      fetchProviders();
     } catch (err) {
     }
   };

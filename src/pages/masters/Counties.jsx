@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { countiesApi } from '../../api/voters';
 import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import FormInput from '../../components/shared/FormInput';
@@ -9,17 +10,12 @@ const Counties = () => {
   const [counties, setCounties] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const API_URL = '/api/counties';
-
   const fetchCounties = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL);
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-      const data = await res.json();
-      setCounties(data);
+      const data = await countiesApi.list();
+      setCounties(Array.isArray(data) ? data : []);
     } catch (err) {
-      // alert('Failed to load counties. Is the backend server running?');
     } finally {
       setLoading(false);
     }
@@ -61,25 +57,16 @@ const Counties = () => {
     };
 
     try {
-      const method = editingRow ? 'PUT' : 'POST';
-      const url = editingRow ? `${API_URL}/${editingRow.id}` : API_URL;
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-
-      if (res.ok) {
-        alert(editingRow ? 'County updated successfully!' : 'County created successfully!');
-        fetchCounties();
-        handleBack();
+      if (editingRow) {
+        await countiesApi.update(editingRow.id, data);
       } else {
-        const errorData = await res.json();
-        alert(`Failed to save: ${JSON.stringify(errorData)}`);
+        await countiesApi.create(data);
       }
+      alert(editingRow ? 'County updated successfully!' : 'County created successfully!');
+      fetchCounties();
+      handleBack();
     } catch (err) {
-      alert('Network error: Could not connect to the server.');
+      alert(`Failed to save: ${err.message}`);
     }
   };
 
@@ -87,8 +74,8 @@ const Counties = () => {
     if (!window.confirm(`Are you sure you want to delete ${row.name}?`)) return;
     
     try {
-      const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
-      if (res.ok) fetchCounties();
+      await countiesApi.remove(row.id);
+      fetchCounties();
     } catch (err) {
     }
   };

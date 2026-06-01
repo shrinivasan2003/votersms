@@ -1,4 +1,4 @@
-import { get, post, put, del } from './client';
+import { get, post, put, del, getText } from './client';
 
 export const listsApi = {
   list: (params = {})          => get('/api/contact-lists' + _qs(params)),
@@ -9,7 +9,11 @@ export const listsApi = {
   members: (id, params = {})    => get(`/api/contact-lists/${id}/members` + _qs(params)),
   addMember: (id, data)         => post(`/api/contact-lists/${id}/members`, data),
   removeMember: (listId, voterId) => del(`/api/contact-lists/${listId}/members/${voterId}`),
-  importCsv: (id, rows)         => post(`/api/contact-lists/${id}/import`, rows),
+  bulkImport: (id, rows)          => post(`/api/contact-lists/${id}/members/bulk`, rows),
+  metaTags: (id)                  => get(`/api/contact-lists/${id}/meta-tags`),
+  saveMetaTag: (id, data)         => post(`/api/contact-lists/${id}/meta-tags`, data),
+  deleteMetaTag: (id, key)        => del(`/api/contact-lists/${id}/meta-tags/${key}`),
+  csvTemplate: (id)               => getText(`/api/contact-lists/${id}/csv-template`),
 };
 
 function _qs(params) {

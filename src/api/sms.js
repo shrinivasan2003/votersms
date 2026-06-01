@@ -22,7 +22,7 @@ export const smsJobsApi = {
 };
 
 export const smsDeliveryApi = {
-  stats: (jobId) => get(`/api/sms-delivery-stats/${jobId}`),
+  stats: () => get('/api/sms-delivery-stats'),
 };
 
 function _qs(params) {

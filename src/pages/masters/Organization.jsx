@@ -3,6 +3,7 @@ import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import FormInput from '../../components/shared/FormInput';
 import { MapPin, Building2 } from 'lucide-react';
+import { countiesApi, precinctsApi } from '../../api/voters';
 
 // ── County sub-section ────────────────────────────────────────────────────────
 const CountiesSection = () => {
@@ -11,13 +12,10 @@ const CountiesSection = () => {
   const [counties, setCounties]   = useState([]);
   const [loading, setLoading]     = useState(false);
 
-  const API = '/api/counties';
-
   const fetchCounties = async () => {
     setLoading(true);
     try {
-      const res  = await fetch(API);
-      const data = await res.json();
+      const data = await countiesApi.list();
       setCounties(Array.isArray(data) ? data : []);
     } catch (err) {
     } finally {
@@ -38,21 +36,19 @@ const CountiesSection = () => {
     const fd   = new FormData(e.target);
     const data = { code: fd.get('code'), name: fd.get('name'), state: fd.get('state'), status: 'Active' };
     try {
-      const method = editingRow ? 'PUT' : 'POST';
-      const url    = editingRow ? `${API}/${editingRow.id}` : API;
-      const res    = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-      if (res.ok) { fetchCounties(); setView('list'); setEditingRow(null); }
-      else { const err = await res.json(); alert(`Failed to save: ${JSON.stringify(err)}`); }
+      if (editingRow) { await countiesApi.update(editingRow.id, data); }
+      else            { await countiesApi.create(data); }
+      fetchCounties(); setView('list'); setEditingRow(null);
     } catch (err) {
-      alert('Network error: Could not connect to the server.');
+      alert(`Failed to save: ${err.message}`);
     }
   };
 
   const handleDelete = async (row) => {
     if (!window.confirm(`Delete county "${row.name}"?`)) return;
     try {
-      const res = await fetch(`${API}/${row.id}`, { method: 'DELETE' });
-      if (res.ok) fetchCounties();
+      await countiesApi.remove(row.id);
+      fetchCounties();
     } catch (_err) { }
   };
 
@@ -108,17 +104,10 @@ const PrecinctsSection = () => {
   const [counties, setCounties]   = useState([]);
   const [loading, setLoading]     = useState(false);
 
-  const API = '/api/precincts';
-
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [pr, cr] = await Promise.all([
-        fetch('/api/precincts-detailed'),
-        fetch('/api/counties'),
-      ]);
-      const pd = await pr.json();
-      const cd = await cr.json();
+      const [pd, cd] = await Promise.all([precinctsApi.detailed(), countiesApi.list()]);
       setPrecincts(Array.isArray(pd) ? pd : []);
       setCounties(Array.isArray(cd) ? cd : []);
     } catch (err) {
@@ -141,10 +130,9 @@ const PrecinctsSection = () => {
     const fd   = new FormData(e.target);
     const data = { code: fd.get('code'), name: fd.get('name'), county_id: fd.get('county_id'), zipcode: fd.get('zipcode') };
     try {
-      const method = editingRow ? 'PUT' : 'POST';
-      const url    = editingRow ? `${API}/${editingRow.id}` : API;
-      const res    = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-      if (res.ok) { fetchData(); setView('list'); setEditingRow(null); }
+      if (editingRow) { await precinctsApi.update(editingRow.id, data); }
+      else            { await precinctsApi.create(data); }
+      fetchData(); setView('list'); setEditingRow(null);
     } catch (err) {
     }
   };
@@ -152,8 +140,8 @@ const PrecinctsSection = () => {
   const handleDelete = async (row) => {
     if (!window.confirm(`Delete precinct "${row.name}"?`)) return;
     try {
-      const res = await fetch(`${API}/${row.id}`, { method: 'DELETE' });
-      if (res.ok) fetchData();
+      await precinctsApi.remove(row.id);
+      fetchData();
     } catch (_err) { }
   };
 

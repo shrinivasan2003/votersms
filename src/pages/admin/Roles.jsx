@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
+import { rolesApi } from '../../api/users';
 
 const Roles = () => {
   const [view, setView] = useState('list'); // 'list' or 'add'
@@ -7,13 +8,10 @@ const Roles = () => {
   const [loading, setLoading] = useState(false);
   const [editingRow, setEditingRow] = useState(null);
 
-  const API_URL = '/api/roles';
-
   const fetchRoles = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL);
-      const data = await res.json();
+      const data = await rolesApi.list();
       setRoles(Array.isArray(data) ? data : []);
     } catch (err) {
     } finally {
@@ -41,25 +39,16 @@ const Roles = () => {
     };
 
     try {
-      const method = editingRow ? 'PUT' : 'POST';
-      const url = editingRow ? `${API_URL}/${editingRow.id}` : API_URL;
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-
-      if (res.ok) {
-        alert(`Role ${editingRow ? 'updated' : 'created'} successfully!`);
-        await fetchRoles();
-        handleBack();
+      if (editingRow) {
+        await rolesApi.update(editingRow.id, data);
       } else {
-        const errorData = await res.json();
-        alert(`Failed to save role: ${errorData.message || 'Check console for details'}`);
+        await rolesApi.create(data);
       }
+      alert(`Role ${editingRow ? 'updated' : 'created'} successfully!`);
+      await fetchRoles();
+      handleBack();
     } catch (err) {
-      alert('Network error. Is the server running?');
+      alert(`Failed to save role: ${err.message}`);
     }
   };
 
@@ -71,8 +60,8 @@ const Roles = () => {
   const handleDelete = async (role) => {
     if (!window.confirm(`Are you sure you want to delete role ${role.name}?`)) return;
     try {
-      const res = await fetch(`${API_URL}/${role.id}`, { method: 'DELETE' });
-      if (res.ok) fetchRoles();
+      await rolesApi.remove(role.id);
+      fetchRoles();
     } catch (err) {
     }
   };
