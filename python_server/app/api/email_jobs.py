@@ -201,9 +201,28 @@ def create_email_job(
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid scheduled_at format.")
 
+        if req.get('provider_id'):
+            p_row = db.execute(
+                text("SELECT id FROM email_providers WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+                {"id": req['provider_id'], "cid": cid},
+            ).fetchone()
+            if not p_row:
+                raise HTTPException(status_code=400, detail="Invalid provider")
+
+        if req.get('list_id'):
+            l_row = db.execute(
+                text("SELECT id FROM contact_lists WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+                {"id": req['list_id'], "cid": cid},
+            ).fetchone()
+            if not l_row:
+                raise HTTPException(status_code=400, detail="Invalid contact list")
+
         template_name = None
         if req.get('template_id'):
-            t_row = db.execute(text("SELECT name FROM email_templates WHERE id=:id"), {"id": req['template_id']}).fetchone()
+            t_row = db.execute(
+                text("SELECT name FROM email_templates WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+                {"id": req['template_id'], "cid": cid},
+            ).fetchone()
             template_name = t_row.name if t_row else None
 
         result = db.execute(
