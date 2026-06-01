@@ -55,7 +55,6 @@ const EmailReplies = () => {
         setSelected(prev => prev ? (data.find(r => r.id === prev.id) ?? prev) : prev);
       }
     } catch (err) {
-      console.error('Failed to fetch email replies:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -70,7 +69,7 @@ const EmailReplies = () => {
       await fetch(`${API_URL}/${reply.id}/read`, { method: 'PATCH' });
       setReplies(prev => prev.map(r => r.id === reply.id ? { ...r, is_read: 1 } : r));
       setSelected(prev => prev?.id === reply.id ? { ...prev, is_read: 1 } : prev);
-    } catch (err) { console.error(err); }
+    } catch (_err) { }
   }, []);
 
   const handleSelect = useCallback((reply) => {
@@ -85,7 +84,7 @@ const EmailReplies = () => {
       await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
       setReplies(prev => prev.filter(r => r.id !== id));
       setSelected(prev => prev?.id === id ? null : prev);
-    } catch (err) { console.error(err); }
+    } catch (_err) { }
   }, []);
 
   const unreadCount = replies.filter(r => !r.is_read).length;

@@ -24,7 +24,6 @@ const Precincts = () => {
       setPrecincts(Array.isArray(precinctsData) ? precinctsData : []);
       setCounties(Array.isArray(countiesData) ? countiesData : []);
     } catch (err) {
-      console.error('Failed to fetch data:', err);
     } finally {
       setLoading(false);
     }
@@ -81,7 +80,6 @@ const Precincts = () => {
         handleBack();
       }
     } catch (err) {
-      console.error('Save failed:', err);
     }
   };
 
@@ -91,7 +89,6 @@ const Precincts = () => {
       const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
       if (res.ok) fetchData();
     } catch (err) {
-      console.error('Delete failed:', err);
     }
   };
 

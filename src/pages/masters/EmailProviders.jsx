@@ -19,7 +19,6 @@ const EmailProviders = () => {
       const data = await res.json();
       setProviders(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to fetch providers:', err);
     } finally {
       setLoading(false);
     }
@@ -104,7 +103,6 @@ const EmailProviders = () => {
         handleBack();
       }
     } catch (err) {
-      console.error('Save failed:', err);
     }
   };
 
@@ -115,7 +113,6 @@ const EmailProviders = () => {
       const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
       if (res.ok) fetchProviders();
     } catch (err) {
-      console.error('Delete failed:', err);
     }
   };
 

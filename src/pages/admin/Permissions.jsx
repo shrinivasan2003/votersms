@@ -19,7 +19,6 @@ const Permissions = () => {
       const data = await res.json();
       setPermissions(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to fetch permissions:', err);
     } finally {
       setLoading(false);
     }
@@ -31,7 +30,6 @@ const Permissions = () => {
       const data = await res.json();
       setRoles(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to fetch roles:', err);
     }
   };
 
@@ -78,7 +76,6 @@ const Permissions = () => {
         handleBack();
       }
     } catch (err) {
-      console.error('Save failed:', err);
     }
   };
 
@@ -91,7 +88,6 @@ const Permissions = () => {
       setSelectedRoleIds(data.roleIds || []);
       setView('add');
     } catch (err) {
-      console.error('Failed to fetch permission details:', err);
     } finally {
       setLoading(false);
     }
@@ -109,7 +105,6 @@ const Permissions = () => {
       const res = await fetch(`${API_URL}/${perm.id}`, { method: 'DELETE' });
       if (res.ok) fetchPermissions();
     } catch (err) {
-      console.error('Delete failed:', err);
     }
   };
 

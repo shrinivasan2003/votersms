@@ -42,7 +42,6 @@ const EmailDeliveryReport = () => {
       setFilteredData(data);
       setPrecincts(Array.isArray(precinctsData) ? precinctsData : []);
     } catch (err) {
-      console.error('Failed to fetch email report data:', err);
     } finally {
       setLoading(false);
     }

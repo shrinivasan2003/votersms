@@ -16,7 +16,6 @@ const Roles = () => {
       const data = await res.json();
       setRoles(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to fetch roles:', err);
     } finally {
       setLoading(false);
     }
@@ -52,17 +51,14 @@ const Roles = () => {
       });
 
       if (res.ok) {
-        console.log('Role saved successfully');
         alert(`Role ${editingRow ? 'updated' : 'created'} successfully!`);
         await fetchRoles();
         handleBack();
       } else {
         const errorData = await res.json();
-        console.error('Save failed:', errorData);
         alert(`Failed to save role: ${errorData.message || 'Check console for details'}`);
       }
     } catch (err) {
-      console.error('Save failed:', err);
       alert('Network error. Is the server running?');
     }
   };
@@ -78,7 +74,6 @@ const Roles = () => {
       const res = await fetch(`${API_URL}/${role.id}`, { method: 'DELETE' });
       if (res.ok) fetchRoles();
     } catch (err) {
-      console.error('Delete failed:', err);
     }
   };
 

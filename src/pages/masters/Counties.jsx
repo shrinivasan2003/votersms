@@ -19,7 +19,6 @@ const Counties = () => {
       const data = await res.json();
       setCounties(data);
     } catch (err) {
-      console.error('Failed to fetch counties:', err);
       // alert('Failed to load counties. Is the backend server running?');
     } finally {
       setLoading(false);
@@ -80,7 +79,6 @@ const Counties = () => {
         alert(`Failed to save: ${JSON.stringify(errorData)}`);
       }
     } catch (err) {
-      console.error('Save failed:', err);
       alert('Network error: Could not connect to the server.');
     }
   };
@@ -92,7 +90,6 @@ const Counties = () => {
       const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
       if (res.ok) fetchCounties();
     } catch (err) {
-      console.error('Delete failed:', err);
     }
   };
 

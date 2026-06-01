@@ -23,7 +23,6 @@ const ProcessJobs = () => {
       const pending = Array.isArray(data) ? data.filter(j => j.status === 'Pending') : [];
       setPendingJobs(pending);
     } catch (err) {
-      console.error('Failed to fetch jobs:', err);
     } finally {
       setTimeout(() => setLoading(false), 500);
     }

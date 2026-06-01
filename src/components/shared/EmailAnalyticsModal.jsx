@@ -55,7 +55,7 @@ const EmailAnalyticsModal = ({ job, onClose }) => {
     fetch(`/api/email-analytics/${job.job_id}`)
       .then((r) => r.json())
       .then(setData)
-      .catch(console.error)
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [job.job_id]);
 

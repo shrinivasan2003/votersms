@@ -123,7 +123,6 @@ const Voters = () => {
       const data = await res.json();
       setVoters(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to fetch recipients:', err);
     } finally {
       setLoading(false);
     }
@@ -184,7 +183,6 @@ const Voters = () => {
       });
       if (res.ok) { fetchData(); handleBack(); }
     } catch (err) {
-      console.error('Save failed:', err);
     }
   };
 
@@ -194,7 +192,6 @@ const Voters = () => {
       const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
       if (res.ok) fetchData();
     } catch (err) {
-      console.error('Delete failed:', err);
     }
   };
 

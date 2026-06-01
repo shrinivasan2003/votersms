@@ -25,7 +25,6 @@ const EmailTemplates = () => {
       const data = await res.json();
       setTemplates(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to fetch templates:', err);
     } finally {
       setLoading(false);
     }
@@ -120,7 +119,6 @@ const EmailTemplates = () => {
         handleBack();
       }
     } catch (err) {
-      console.error('Save failed:', err);
     }
   };
 
@@ -131,7 +129,6 @@ const EmailTemplates = () => {
       const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
       if (res.ok) fetchTemplates();
     } catch (err) {
-      console.error('Delete failed:', err);
     }
   };
 

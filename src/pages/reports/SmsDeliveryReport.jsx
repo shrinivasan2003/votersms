@@ -43,7 +43,6 @@ const SmsDeliveryReport = () => {
       setFilteredData(data);
       setPrecincts(Array.isArray(precinctsData) ? precinctsData : []);
     } catch (err) {
-      console.error('Failed to fetch report data:', err);
     } finally {
       setLoading(false);
     }

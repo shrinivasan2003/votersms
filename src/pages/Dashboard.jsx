@@ -49,7 +49,6 @@ const Dashboard = () => {
         if (recentRes.ok) setRecentJobs(await recentRes.json());
         if (activityRes.ok) setRecentActivity(await activityRes.json());
       } catch (err) {
-        console.error('Error fetching dashboard data:', err);
       }
     };
     fetchData();

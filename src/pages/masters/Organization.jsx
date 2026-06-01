@@ -20,7 +20,6 @@ const CountiesSection = () => {
       const data = await res.json();
       setCounties(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to fetch counties:', err);
     } finally {
       setLoading(false);
     }
@@ -54,7 +53,7 @@ const CountiesSection = () => {
     try {
       const res = await fetch(`${API}/${row.id}`, { method: 'DELETE' });
       if (res.ok) fetchCounties();
-    } catch (err) { console.error(err); }
+    } catch (_err) { }
   };
 
   if (view === 'add') {
@@ -123,7 +122,6 @@ const PrecinctsSection = () => {
       setPrecincts(Array.isArray(pd) ? pd : []);
       setCounties(Array.isArray(cd) ? cd : []);
     } catch (err) {
-      console.error('Failed to fetch precincts:', err);
     } finally {
       setLoading(false);
     }
@@ -148,7 +146,6 @@ const PrecinctsSection = () => {
       const res    = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
       if (res.ok) { fetchData(); setView('list'); setEditingRow(null); }
     } catch (err) {
-      console.error('Save failed:', err);
     }
   };
 
@@ -157,7 +154,7 @@ const PrecinctsSection = () => {
     try {
       const res = await fetch(`${API}/${row.id}`, { method: 'DELETE' });
       if (res.ok) fetchData();
-    } catch (err) { console.error(err); }
+    } catch (_err) { }
   };
 
   if (view === 'add') {

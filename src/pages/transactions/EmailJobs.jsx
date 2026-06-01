@@ -128,7 +128,6 @@ const EmailJobs = () => {
         setAnalyticsMap(map);
       }
     } catch (err) {
-      console.error('Failed to fetch email jobs data:', err);
     } finally {
       setLoading(false);
     }
@@ -222,7 +221,7 @@ const EmailJobs = () => {
     try {
       const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
       if (res.ok) fetchData();
-    } catch (err) { console.error(err); }
+    } catch (_err) { }
   };
 
   const handleSubmit = async (e) => {
@@ -266,7 +265,7 @@ const EmailJobs = () => {
       });
       if (res.ok) { fetchData(); handleBack(); }
       else alert((await res.json()).detail || 'Failed to create job');
-    } catch (err) { console.error(err); }
+    } catch (_err) { }
   };
 
   // ── Create form ───────────────────────────────────────────────────────────

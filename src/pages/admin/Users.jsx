@@ -18,10 +18,8 @@ const Users = () => {
         headers: { ...getAuthHeaders() },
       });
       const data = await res.json();
-      console.log('Fetched users:', data);
       setUsers(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to fetch users:', err);
     } finally {
       setLoading(false);
     }
@@ -51,7 +49,6 @@ const Users = () => {
       data.password = formData.get('password');
     }
 
-    console.log('Saving user data:', data);
 
     try {
       const method = editingRow ? 'PUT' : 'POST';
@@ -64,16 +61,13 @@ const Users = () => {
       });
 
       if (res.ok) {
-        console.log('User saved successfully');
         await fetchUsers();
         handleBack();
       } else {
         const errorData = await res.json();
-        console.error('Save failed:', errorData);
         alert('Save failed. Please check the console for details.');
       }
     } catch (err) {
-      console.error('Save failed:', err);
       alert('Network error. Is the server running?');
     }
   };
@@ -87,7 +81,6 @@ const Users = () => {
       });
       if (res.ok) fetchUsers();
     } catch (err) {
-      console.error('Delete failed:', err);
     }
   };
 

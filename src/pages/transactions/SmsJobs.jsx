@@ -82,7 +82,6 @@ const SmsJobs = () => {
         setTzShort(settingsData.timezone_short?.[settingsData.timezone] || settingsData.timezone);
       }
     } catch (err) {
-      console.error('Failed to fetch data:', err);
     } finally {
       setLoading(false);
     }
@@ -149,7 +148,7 @@ const SmsJobs = () => {
       const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE', headers: { ...getAuthHeaders() } });
       if (res.ok) fetchData();
       else alert((await res.json()).detail || 'Delete failed');
-    } catch (err) { console.error(err); }
+    } catch (_err) { }
   };
 
   const handleSubmit = async (e) => {
@@ -192,7 +191,7 @@ const SmsJobs = () => {
       });
       if (res.ok) { fetchData(); handleBack(); }
       else alert((await res.json()).detail || 'Failed to create job');
-    } catch (err) { console.error(err); }
+    } catch (_err) { }
   };
 
   /* ── Create form ── */

@@ -65,7 +65,6 @@ const Lists = () => {
       setLists(Array.isArray(listsData) ? listsData : []);
       setMasterCount(masterData.count || 0);
     } catch (err) {
-      console.error('Failed to fetch lists:', err);
     } finally {
       setLoading(false);
     }
@@ -78,7 +77,6 @@ const Lists = () => {
       const data = await res.json();
       setMembers(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to fetch members:', err);
     } finally {
       setMembersLoading(false);
     }
@@ -90,7 +88,6 @@ const Lists = () => {
       const data = await res.json();
       setMetaTags(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to fetch meta tags:', err);
     }
   };
 
@@ -162,7 +159,6 @@ const Lists = () => {
         setEditingList(null);
       }
     } catch (err) {
-      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -175,7 +171,6 @@ const Lists = () => {
       await fetch(`/api/contact-lists/${id}`, { method: 'DELETE' });
       fetchLists();
     } catch (err) {
-      console.error(err);
     }
   };
 
@@ -200,7 +195,6 @@ const Lists = () => {
       setSelectedList(prev => ({ ...prev, member_count: (prev.member_count || 0) + 1 }));
       setTimeout(() => setAddMsg(''), 3000);
     } catch (err) {
-      console.error(err);
       setAddError('Connection error. Please try again.');
       setTimeout(() => setAddError(''), 4000);
     }
@@ -213,7 +207,6 @@ const Lists = () => {
       fetchMembers(selectedList.id);
       setSelectedList(prev => ({ ...prev, member_count: Math.max((prev.member_count || 1) - 1, 0) }));
     } catch (err) {
-      console.error(err);
     }
   };
 
@@ -272,7 +265,6 @@ const Lists = () => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Template download failed:', err);
     }
   };
 
@@ -295,7 +287,6 @@ const Lists = () => {
       setIsAddTagOpen(false);
       fetchMetaTags(selectedList.id);
     } catch (err) {
-      console.error(err);
     } finally {
       setTagSaving(false);
     }
@@ -307,7 +298,6 @@ const Lists = () => {
       await fetch(`/api/contact-lists/${selectedList.id}/meta-tags/${tagKey}`, { method: 'DELETE' });
       fetchMetaTags(selectedList.id);
     } catch (err) {
-      console.error(err);
     }
   };
 

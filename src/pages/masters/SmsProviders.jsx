@@ -22,7 +22,6 @@ const SmsProviders = () => {
       const data = await res.json();
       setProviders(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to fetch providers:', err);
     } finally {
       setLoading(false);
     }
@@ -94,11 +93,9 @@ const SmsProviders = () => {
         handleBack();
       } else {
         const errData = await res.json();
-        console.error('Save failed on server:', errData);
         alert(`Error: ${errData.message || 'Failed to save provider. Please check if the Code is unique.'}`);
       }
     } catch (err) {
-      console.error('Network error during save:', err);
       alert('Network error. Please make sure the server is running on port 5000.');
     }
   };
@@ -110,7 +107,6 @@ const SmsProviders = () => {
       const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
       if (res.ok) fetchProviders();
     } catch (err) {
-      console.error('Delete failed:', err);
     }
   };
 
