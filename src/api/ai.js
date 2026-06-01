@@ -2,7 +2,7 @@ import { get, post, put } from './client';
 
 export const aiApi = {
   getConfig: ()          => get('/api/ai/config'),
-  saveConfig: (data)     => post('/api/ai/config', data),
+  saveConfig: (data)     => put('/api/ai/config', data),
   getUsage: ()           => get('/api/ai/usage'),
   generateEmail: (data)  => post('/api/ai/generate-email-template', data),
 };
