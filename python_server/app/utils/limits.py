@@ -25,6 +25,8 @@ DEFAULTS = {
     "max_sms_per_month":       50_000,
     "max_emails_per_month":    50_000,
     "max_whatsapp_per_month":  10_000,
+    "ai_monthly_limit":            50,
+    "ai_tokens_monthly_limit": 500_000,
 }
 
 
@@ -107,18 +109,40 @@ def _emails_this_month(db: Session, customer_id: int) -> int:
     return r.c if r else 0
 
 
+def _ai_usage_this_month(db: Session, customer_id: int) -> dict:
+    """Return AI generation count and token totals for the current calendar month."""
+    r = db.execute(
+        text("""
+            SELECT
+                COUNT(*)                    AS generations,
+                COALESCE(SUM(total_tokens), 0) AS tokens
+            FROM ai_usage_logs
+            WHERE customer_id = :cid
+              AND YEAR(created_at)  = YEAR(NOW())
+              AND MONTH(created_at) = MONTH(NOW())
+        """),
+        {"cid": customer_id},
+    ).fetchone()
+    if r:
+        return {"generations": int(r[0] or 0), "tokens": int(r[1] or 0)}
+    return {"generations": 0, "tokens": 0}
+
+
 def get_usage(db: Session, customer_id: int) -> dict:
     """Return current usage figures for a customer."""
+    ai = _ai_usage_this_month(db, customer_id)
     return {
-        "voters":            _count(db, "voters",              customer_id),
-        "contact_lists":     _count(db, "contact_lists",       customer_id),
-        "sms_templates":     _count(db, "sms_templates",       customer_id),
-        "email_templates":   _count(db, "email_templates",     customer_id),
-        "whatsapp_templates":_count(db, "whatsapp_templates",  customer_id),
-        "sms_jobs":          _count(db, "sms_jobs",            customer_id),
-        "email_jobs":        _count(db, "email_jobs",          customer_id),
-        "whatsapp_jobs":     _count(db, "whatsapp_jobs",       customer_id),
-        "sms_this_month":    _monthly_sum(db, "sms_jobs",      customer_id),
-        "emails_this_month": _emails_this_month(db,            customer_id),
+        "voters":              _count(db, "voters",              customer_id),
+        "contact_lists":       _count(db, "contact_lists",       customer_id),
+        "sms_templates":       _count(db, "sms_templates",       customer_id),
+        "email_templates":     _count(db, "email_templates",     customer_id),
+        "whatsapp_templates":  _count(db, "whatsapp_templates",  customer_id),
+        "sms_jobs":            _count(db, "sms_jobs",            customer_id),
+        "email_jobs":          _count(db, "email_jobs",          customer_id),
+        "whatsapp_jobs":       _count(db, "whatsapp_jobs",       customer_id),
+        "sms_this_month":      _monthly_sum(db, "sms_jobs",      customer_id),
+        "emails_this_month":   _emails_this_month(db,            customer_id),
         "whatsapp_this_month": _monthly_sum(db, "whatsapp_jobs", customer_id),
+        "ai_generations_this_month": ai["generations"],
+        "ai_tokens_this_month":      ai["tokens"],
     }

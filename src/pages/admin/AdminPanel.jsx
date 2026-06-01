@@ -5,7 +5,7 @@ import {
   Building2, Mail, UserPlus, Activity, Trash2, PowerOff,
   CheckCircle, XCircle, Power, Settings, Send, PauseCircle,
   LogOut, ChevronRight, Users, BarChart3, Database, SlidersHorizontal, X,
-  ClipboardList, Menu,
+  ClipboardList, Menu, Sparkles, Info, Pencil, Check, RefreshCw,
 } from 'lucide-react';
 import AuditLog from './AuditLog';
 import SliderCaptcha from '../../components/shared/SliderCaptcha';
@@ -18,6 +18,7 @@ import { customerLimitsApi } from '../../api/customerLimits';
 import { adminApi } from '../../api/admin';
 import { CACHE_KEYS } from '../../config/constants';
 import FormField from '../../components/shared/FormField';
+import Pagination from '../../components/shared/Pagination';
 import bdaLogo from '../../assets/bda-logo.webp';
 
 // ── Toast display component ────────────────────────────────────────────────────
@@ -383,6 +384,8 @@ function MonitorAccountsTab() {
   const [actionLoading, setActionLoading] = useState(null);
   const [limitsCustomer, setLimitsCustomer] = useState(null);
   const { toast, showToast } = useToast();
+  const [monitorPage, setMonitorPage]         = useState(1);
+  const [monitorPageSize, setMonitorPageSize] = useState(10);
 
   const doAction = async (userId, action) => {
     setActionLoading(userId + action);
@@ -473,7 +476,7 @@ function MonitorAccountsTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {users.map((u) => (
+                {users.slice((monitorPage-1)*monitorPageSize, monitorPage*monitorPageSize).map((u) => (
                   <tr key={u.id} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2.5">
@@ -543,12 +546,268 @@ function MonitorAccountsTab() {
             </table>
           </div>
         )}
+        {users.length > monitorPageSize && (
+          <div className="px-5 border-t border-gray-100">
+            <Pagination
+              page={monitorPage}
+              pageSize={monitorPageSize}
+              total={users.length}
+              onPageChange={setMonitorPage}
+              onSizeChange={(s) => { setMonitorPageSize(s); setMonitorPage(1); }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
 // ── Master Settings tab ────────────────────────────────────────────────────────
+// ── AI Usage tab ─────────────────────────────────────────────────────────────
+
+function AIUsageTab() {
+  const [rows, setRows]           = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [editing, setEditing]     = useState({});
+  const [saving, setSaving]       = useState({});
+  const [aiPage, setAiPage]       = useState(1);
+  const AI_PAGE_SIZE              = 10;
+  const [showInfo, setShowInfo]   = useState(false);
+  const { toast, showToast }      = useToast();
+
+  const token = localStorage.getItem('auth_token') || '';
+
+  const fetchUsage = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/ai/admin/usage', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      setRows(Array.isArray(data) ? data : []);
+    } catch (err) {
+      showToast(err.message || 'Failed to load AI usage data', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchUsage(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleEditStart = (cid, currentLimit) => {
+    setEditing(prev => ({ ...prev, [cid]: String(currentLimit) }));
+  };
+
+  const handleEditSave = async (cid) => {
+    const val = parseInt(editing[cid], 10);
+    if (isNaN(val) || val < 0) { showToast('Enter a valid positive number', 'error'); return; }
+    setSaving(prev => ({ ...prev, [cid]: true }));
+    try {
+      const res = await fetch(`/api/ai/admin/usage/${cid}/limit`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ai_monthly_limit: val }),
+      });
+      if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+      showToast('Limit updated successfully');
+      setEditing(prev => { const n = { ...prev }; delete n[cid]; return n; });
+      fetchUsage();
+    } catch (err) {
+      showToast(err.message || 'Failed to update limit', 'error');
+    } finally {
+      setSaving(prev => { const n = { ...prev }; delete n[cid]; return n; });
+    }
+  };
+
+  const pct = (used, limit) => limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
+  const barColor = (p) => p >= 90 ? 'bg-red-500' : p >= 70 ? 'bg-amber-400' : 'bg-indigo-500';
+  const textColor = (p) => p >= 90 ? 'text-red-600' : p >= 70 ? 'text-amber-600' : 'text-indigo-600';
+
+  const nowMonth = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+
+  return (
+    <div className="space-y-6 relative pb-16">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-[#001F3F] flex items-center gap-2">
+            <Sparkles size={20} className="text-indigo-500" />
+            AI Usage — {nowMonth}
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Monitor AI generation usage per organization and adjust monthly quotas.
+            Counts reset on the 1st of each month.
+          </p>
+        </div>
+        <button
+          onClick={fetchUsage}
+          disabled={loading}
+          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 hover:border-gray-300 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+        >
+          {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+          Refresh
+        </button>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className={`flex items-start gap-3 p-4 rounded-xl text-sm font-medium border
+          ${toast.type === 'success' ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-800 border-red-200'}`}>
+          {toast.type === 'success'
+            ? <CheckCircle size={16} className="mt-0.5 shrink-0 text-green-600" />
+            : <XCircle    size={16} className="mt-0.5 shrink-0 text-red-500" />}
+          {toast.msg}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-gray-400 py-8 justify-center">
+          <Loader2 size={18} className="animate-spin" /> Loading usage data…
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="text-center py-12 text-gray-400 text-sm">No organizations found.</div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[700px]">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">Organization</th>
+                  <th className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">Generations Used</th>
+                  <th className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">Monthly Limit</th>
+                  <th className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">Tokens Used</th>
+                  <th className="px-5 py-3.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">Usage</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {rows.slice((aiPage-1)*AI_PAGE_SIZE, aiPage*AI_PAGE_SIZE).map((row) => {
+                  const p = pct(row.generations_used, row.ai_monthly_limit);
+                  const isEditing = editing[row.customer_id] !== undefined;
+                  return (
+                    <tr key={row.customer_id} className="hover:bg-gray-50/60 transition-colors">
+                      <td className="px-5 py-4">
+                        <p className="font-semibold text-[#001F3F] text-sm">{row.organization_name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">ID {row.customer_id}</p>
+                      </td>
+                      <td className="px-5 py-4 text-sm tabular-nums">
+                        <span className={`font-bold ${textColor(p)}`}>{row.generations_used.toLocaleString()}</span>
+                        <span className="text-gray-400"> / {row.ai_monthly_limit.toLocaleString()}</span>
+                        <p className="text-xs text-gray-400 mt-0.5">{row.generations_remaining.toLocaleString()} left</p>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          {isEditing ? (
+                            <>
+                              <input
+                                type="number"
+                                min={0}
+                                value={editing[row.customer_id]}
+                                onChange={e => setEditing(prev => ({ ...prev, [row.customer_id]: e.target.value }))}
+                                className="w-20 border border-indigo-300 rounded-lg px-2 py-1 text-sm font-mono outline-none focus:border-indigo-500"
+                              />
+                              <button
+                                onClick={() => handleEditSave(row.customer_id)}
+                                disabled={saving[row.customer_id]}
+                                className="p-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                              >
+                                {saving[row.customer_id]
+                                  ? <Loader2 size={12} className="animate-spin" />
+                                  : <Check size={12} />}
+                              </button>
+                              <button
+                                onClick={() => setEditing(prev => { const n = { ...prev }; delete n[row.customer_id]; return n; })}
+                                className="text-xs text-gray-400 hover:text-gray-600"
+                              >
+                                cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-sm font-semibold text-gray-700 tabular-nums">
+                                {row.ai_monthly_limit.toLocaleString()}
+                              </span>
+                              <button
+                                onClick={() => handleEditStart(row.customer_id, row.ai_monthly_limit)}
+                                className="p-1 text-gray-300 hover:text-indigo-600 transition-colors"
+                                title="Edit limit"
+                              >
+                                <Pencil size={13} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-sm text-gray-600 tabular-nums">
+                        {row.tokens_used.toLocaleString()}
+                        <p className="text-xs text-gray-400 mt-0.5">/ {row.ai_tokens_monthly_limit.toLocaleString()}</p>
+                      </td>
+                      <td className="px-5 py-4 min-w-[140px]">
+                        <div className="space-y-1.5">
+                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden w-32">
+                            <div className={`h-full rounded-full transition-all ${barColor(p)}`} style={{ width: `${p}%` }} />
+                          </div>
+                          <span className={`text-xs font-bold tabular-nums ${textColor(p)}`}>{p}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {rows.length > AI_PAGE_SIZE && (
+            <div className="px-5 border-t border-gray-100">
+              <Pagination
+                page={aiPage}
+                pageSize={AI_PAGE_SIZE}
+                total={rows.length}
+                onPageChange={setAiPage}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Info button — bottom-left ── */}
+      <div className="fixed bottom-6 left-6 z-30">
+        <div className="relative">
+          {showInfo && (
+            <div className="absolute bottom-12 left-0 w-80 bg-white border border-indigo-100 rounded-2xl shadow-xl p-5 text-sm space-y-3 z-10">
+              <div className="flex items-center gap-2 font-bold text-[#001F3F]">
+                <Sparkles size={16} className="text-indigo-500" />
+                How AI Quotas Work
+              </div>
+              <div className="space-y-2 text-xs text-gray-600 leading-relaxed">
+                <p><strong>Monthly reset:</strong> Generation counts and token totals reset automatically on the 1st of every calendar month.</p>
+                <p><strong>Per-org key:</strong> Every organization must configure their own AI provider API key from <em>Configuration → Nadia AI</em>. There is no shared platform key.</p>
+                <p><strong>Quota enforcement:</strong> Limits are stored in <code className="bg-gray-100 px-1 rounded">customer_limits.ai_monthly_limit</code>. When an org hits their limit, the Generate button returns a 429 error with a friendly message.</p>
+                <p><strong>Token tracking:</strong> Token usage is recorded for analytics and future billing. Multiply <code className="bg-gray-100 px-1 rounded">tokens_used</code> by the per-token rate of the customer's plan to calculate cost.</p>
+                <p><strong>Billing path:</strong> The <code className="bg-gray-100 px-1 rounded">ai_usage_logs</code> table stores every generation with provider, model, and token breakdown — ready for invoice generation.</p>
+              </div>
+              <button
+                onClick={() => setShowInfo(false)}
+                className="w-full text-center text-xs font-bold text-indigo-600 hover:text-indigo-800 border border-indigo-200 rounded-lg py-1.5"
+              >
+                Close
+              </button>
+            </div>
+          )}
+          <button
+            onClick={() => setShowInfo(v => !v)}
+            className="w-10 h-10 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center shadow-lg shadow-indigo-300/40 transition-all"
+            title="How AI quotas work"
+          >
+            <Info size={17} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Master Settings tab ────────────────────────────────────────────────────────
+
 function MasterSettingsTab() {
   const fetchSettings = useCallback(() => adminApi.getSettings(), []);
   const { data: settingsData, loading: settingsLoading } = useApi(fetchSettings, CACHE_KEYS.ADMIN_SETTINGS);
@@ -684,6 +943,7 @@ const AdminPanel = () => {
     { key: 'create',   label: 'Create Customer',  Icon: UserPlus      },
     { key: 'monitor',  label: 'Monitor Accounts', Icon: Activity      },
     { key: 'audit',    label: 'Audit Log',        Icon: ClipboardList },
+    { key: 'ai',       label: 'AI Usage',         Icon: Sparkles      },
     { key: 'settings', label: 'Settings',         Icon: Settings      },
   ];
 
@@ -865,6 +1125,7 @@ const AdminPanel = () => {
             {tab === 'create'   && <CreateCustomerTab />}
             {tab === 'monitor'  && <MonitorAccountsTab />}
             {tab === 'audit'    && <AuditLog />}
+            {tab === 'ai'       && <AIUsageTab />}
             {tab === 'settings' && <MasterSettingsTab />}
           </div>
         </main>

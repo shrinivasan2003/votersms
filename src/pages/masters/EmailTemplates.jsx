@@ -3,14 +3,18 @@ import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
 import ListTagPicker from '../../components/shared/ListTagPicker';
+import NadiaAI from '../../components/shared/NadiaAI';
 
 const EmailTemplates = () => {
   const [view, setView] = useState('list'); // 'list' or 'add'
   const [editingRow, setEditingRow] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
-  const bodyRef = useRef(null);
-  const [format, setFormat] = useState('Plain Text');
+  const bodyRef    = useRef(null);
+  const subjectRef = useRef(null);
+  const [format, setFormat]             = useState('Plain Text');
+  const [metaTags, setMetaTags]         = useState([]);   // tags from selected list in ListTagPicker
+  const [nadiaFormat, setNadiaFormat]   = useState('Plain Text');
 
   const API_URL = '/api/email-templates';
 
@@ -77,6 +81,13 @@ const EmailTemplates = () => {
   const handleBack = () => {
     setView('list');
     setEditingRow(null);
+  };
+
+  // Called by NadiaAI when user clicks "Use This Template"
+  const handleNadiaUse = ({ subject, body }) => {
+    if (subjectRef.current) subjectRef.current.value = subject;
+    if (bodyRef.current)    bodyRef.current.value    = body;
+    setFormat(nadiaFormat);
   };
 
   const handleSubmit = async (e) => {
@@ -168,6 +179,7 @@ const EmailTemplates = () => {
             <div className="space-y-2">
               <label className="block text-sm font-bold text-brand-textPrimary">Subject *</label>
               <input
+                ref={subjectRef}
                 type="text"
                 name="subject"
                 placeholder="Email subject line"
@@ -216,16 +228,16 @@ const EmailTemplates = () => {
               <div className="flex justify-between items-center">
                 <label className="block text-sm font-bold text-brand-textPrimary">Message Body *</label>
                 <div className="flex rounded-md overflow-hidden border border-gray-200">
-                  <button 
+                  <button
                     type="button"
-                    onClick={() => setFormat('Plain Text')}
+                    onClick={() => { setFormat('Plain Text'); setNadiaFormat('Plain Text'); }}
                     className={`px-3 py-1 text-[11px] font-bold transition-all ${format === 'Plain Text' ? 'bg-brand-blue text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
                   >
                     Plain Text
                   </button>
-                  <button 
+                  <button
                     type="button"
-                    onClick={() => setFormat('HTML')}
+                    onClick={() => { setFormat('HTML'); setNadiaFormat('HTML'); }}
                     className={`px-3 py-1 text-[11px] font-bold transition-all ${format === 'HTML' ? 'bg-brand-blue text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
                   >
                     HTML
@@ -270,7 +282,7 @@ const EmailTemplates = () => {
                 </p>
                 <p className="text-gray-400">Example: <em>Dear {'{{FirstName}}'}, your ballot has been received.</em></p>
               </div>
-              <ListTagPicker textareaRef={bodyRef} />
+              <ListTagPicker textareaRef={bodyRef} onTagsChange={setMetaTags} />
             </div>
 
             <div className="flex items-center space-x-3">
@@ -302,6 +314,15 @@ const EmailTemplates = () => {
             </div>
           </form>
         </div>
+
+        {/* Nadia AI — floating assistant, visible on add/edit view */}
+        <NadiaAI
+          availableVariables={[
+            '{{FirstName}}', '{{LastName}}', '{{FullName}}',
+            ...metaTags.map(t => `{{${t.tag_key}}}`),
+          ]}
+          onUseTemplate={handleNadiaUse}
+        />
       </div>
     );
   }

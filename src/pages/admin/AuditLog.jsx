@@ -6,6 +6,7 @@ import {
   ClipboardList, ChevronDown, ChevronRight, Loader2,
   XCircle, Clock, Trash2, Edit3, Plus, BarChart3,
 } from 'lucide-react';
+import Pagination from '../../components/shared/Pagination';
 
 // Token is stored as a plain string at 'auth_token' by AuthContext
 function getToken() {
@@ -102,33 +103,51 @@ const SummaryCard = ({ icon: Icon, label, value, color }) => (
 // ── Entity table (generic) ────────────────────────────────────────────────────
 
 const EntityTable = ({ columns, rows, emptyMsg }) => {
+  const [page, setPage]         = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+
   if (!rows?.length) {
     return <p className="py-10 text-center text-sm text-gray-400">{emptyMsg || 'No records found.'}</p>;
   }
+
+  const sliced = rows.slice((page - 1) * pageSize, page * pageSize);
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-100">
-            {columns.map((c) => (
-              <th key={c.key} className="px-3 py-2.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">
-                {c.label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
+    <div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-gray-100">
               {columns.map((c) => (
-                <td key={c.key} className="px-3 py-2.5 whitespace-nowrap">
-                  {c.render ? c.render(row) : (row[c.key] ?? '—')}
-                </td>
+                <th key={c.key} className="px-3 py-2.5 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                  {c.label}
+                </th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {sliced.map((row, i) => (
+              <tr key={i} className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
+                {columns.map((c) => (
+                  <td key={c.key} className="px-3 py-2.5 whitespace-nowrap">
+                    {c.render ? c.render(row) : (row[c.key] ?? '—')}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="px-3 border-t border-gray-50">
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={rows.length}
+          onPageChange={setPage}
+          onSizeChange={(s) => { setPageSize(s); setPage(1); }}
+          pageSizes={[15, 25, 50]}
+        />
+      </div>
     </div>
   );
 };
@@ -206,6 +225,7 @@ const AuditEventLog = ({ customerId, entityTypeFilter }) => {
     to_date: '',
     search: '',
     page: 1,
+    page_size: 15,
   });
 
   const load = useCallback(async (f) => {
@@ -297,25 +317,13 @@ const AuditEventLog = ({ customerId, entityTypeFilter }) => {
               </tbody>
             </table>
           </div>
-          {/* Pagination */}
-          <div className="flex items-center justify-between mt-3 text-xs text-gray-500">
-            <span>{logs.total} total event{logs.total !== 1 ? 's' : ''}</span>
-            <div className="flex gap-1">
-              <button disabled={filters.page <= 1}
-                onClick={() => setFilters((f) => ({ ...f, page: f.page - 1 }))}
-                className="px-2.5 py-1 border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50">
-                ‹ Prev
-              </button>
-              <span className="px-2.5 py-1 bg-gray-50 border border-gray-100 rounded-lg font-semibold">
-                {filters.page} / {Math.ceil(logs.total / 50) || 1}
-              </span>
-              <button disabled={filters.page >= Math.ceil(logs.total / 50)}
-                onClick={() => setFilters((f) => ({ ...f, page: f.page + 1 }))}
-                className="px-2.5 py-1 border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50">
-                Next ›
-              </button>
-            </div>
-          </div>
+          <Pagination
+            page={filters.page}
+            pageSize={15}
+            total={logs.total}
+            onPageChange={(p) => setFilters((f) => ({ ...f, page: p }))}
+            className="mt-3"
+          />
         </>
       )}
     </div>
@@ -540,6 +548,8 @@ function OrgListPage({ onSelectOrg }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
+  const [orgPage, setOrgPage]         = useState(1);
+  const [orgPageSize, setOrgPageSize] = useState(10);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -611,6 +621,7 @@ function OrgListPage({ onSelectOrg }) {
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50">
                   <th className="px-4 py-3 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">Organization</th>
+
                   <th className="px-4 py-3 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">Status</th>
                   <th className="px-4 py-3 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">Created</th>
                   <th className="px-4 py-3 text-left text-[11px] font-bold text-gray-400 uppercase tracking-wider">Last Activity</th>
@@ -626,7 +637,7 @@ function OrgListPage({ onSelectOrg }) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((org) => {
+                {filtered.slice((orgPage-1)*orgPageSize, orgPage*orgPageSize).map((org) => {
                   const totalJobs = (org.total_sms_jobs || 0) + (org.total_email_jobs || 0) + (org.total_whatsapp_jobs || 0);
                   return (
                     <tr key={org.customer_id}
@@ -667,8 +678,14 @@ function OrgListPage({ onSelectOrg }) {
               </tbody>
             </table>
           </div>
-          <div className="px-4 py-3 border-t border-gray-100 bg-gray-50/50">
-            <p className="text-xs text-gray-400">{filtered.length} organization{filtered.length !== 1 ? 's' : ''}</p>
+          <div className="px-4 border-t border-gray-100">
+            <Pagination
+              page={orgPage}
+              pageSize={orgPageSize}
+              total={filtered.length}
+              onPageChange={setOrgPage}
+              onSizeChange={(s) => { setOrgPageSize(s); setOrgPage(1); }}
+            />
           </div>
         </div>
       )}

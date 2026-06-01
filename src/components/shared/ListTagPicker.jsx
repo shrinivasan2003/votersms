@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Tags } from 'lucide-react';
 
-const ListTagPicker = ({ textareaRef }) => {
+const ListTagPicker = ({ textareaRef, onTagsChange }) => {
   const [lists, setLists] = useState([]);
   const [selectedListId, setSelectedListId] = useState('');
   const [tags, setTags] = useState([]);
@@ -14,12 +14,20 @@ const ListTagPicker = ({ textareaRef }) => {
   }, []);
 
   useEffect(() => {
-    if (!selectedListId) { setTags([]); return; }
+    if (!selectedListId) {
+      setTags([]);
+      onTagsChange?.([]);
+      return;
+    }
     fetch(`/api/contact-lists/${selectedListId}/meta-tags`)
       .then(r => r.json())
-      .then(data => setTags(Array.isArray(data) ? data : []))
+      .then(data => {
+        const arr = Array.isArray(data) ? data : [];
+        setTags(arr);
+        onTagsChange?.(arr);
+      })
       .catch(() => {});
-  }, [selectedListId]);
+  }, [selectedListId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const insertTag = (tagKey) => {
     const ta = textareaRef?.current;

@@ -391,6 +391,8 @@ const Voters = () => {
           onEdit={handleEdit}
           onDelete={handleDelete}
           emptyMessage="No recipients found"
+          pageSize={25}
+          pageSizes={[25, 50, 100]}
         />
       )}
 

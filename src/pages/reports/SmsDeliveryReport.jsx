@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BarChart2, Printer, Search, X, Calendar, ChevronDown, Eye } from 'lucide-react';
+import Pagination from '../../components/shared/Pagination';
 
 const SmsDeliveryReport = () => {
   const [filters, setFilters] = useState({
@@ -21,6 +22,8 @@ const SmsDeliveryReport = () => {
   const [filteredData, setFilteredData] = useState([]);
   const [precincts, setPrecincts] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [smsPage, setSmsPage]         = useState(1);
+  const [smsPageSize, setSmsPageSize] = useState(10);
 
   const fetchData = async () => {
     setLoading(true);
@@ -302,7 +305,7 @@ const SmsDeliveryReport = () => {
                 <tr>
                   <td colSpan={columns.length} className="px-6 py-10 text-center text-brand-textSecondary font-medium">No records found</td>
                 </tr>
-              ) : filteredData.map((row) => (
+              ) : filteredData.slice((smsPage-1)*smsPageSize, smsPage*smsPageSize).map((row) => (
                 <tr key={row.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="bg-gray-100 text-brand-textPrimary px-2 py-1 rounded text-xs font-bold">#{row.id}</span>
@@ -345,6 +348,17 @@ const SmsDeliveryReport = () => {
             </tbody>
           </table>
         </div>
+        {filteredData.length > 0 && (
+          <div className="px-6 border-t border-brand-border bg-white">
+            <Pagination
+              page={smsPage}
+              pageSize={smsPageSize}
+              total={filteredData.length}
+              onPageChange={setSmsPage}
+              onSizeChange={(s) => { setSmsPageSize(s); setSmsPage(1); }}
+            />
+          </div>
+        )}
       </div>
 
     </div>

@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import StatCard from '../components/shared/StatCard';
 import Button from '../components/shared/Button';
+import Pagination from '../components/shared/Pagination';
 
 const Dashboard = () => {
   const auth = useAuth();
@@ -31,6 +32,10 @@ const Dashboard = () => {
     endDate: '',
     search: ''
   });
+  const [activityPage, setActivityPage]   = useState(1);
+  const [jobsPage, setJobsPage]           = useState(1);
+  const [jobsPageSize, setJobsPageSize]   = useState(5);
+  const ACTIVITY_PAGE_SIZE = 5;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -95,6 +100,15 @@ const Dashboard = () => {
     }
     return true;
   });
+
+  const pagedActivity = recentActivity.slice(
+    (activityPage - 1) * ACTIVITY_PAGE_SIZE,
+    activityPage * ACTIVITY_PAGE_SIZE
+  );
+  const pagedJobs = filteredJobs.slice(
+    (jobsPage - 1) * jobsPageSize,
+    jobsPage * jobsPageSize
+  );
 
   return (
     <div className="space-y-6">
@@ -192,24 +206,33 @@ const Dashboard = () => {
               <p className="text-xs text-gray-400 mt-1">Create a job to see activity here.</p>
             </div>
           ) : (
-            <div className="space-y-0">
-              {recentActivity.map((item, i) => (
-                <div
-                  key={i}
-                  className={`flex items-start relative pl-4 ml-3 ${
-                    i < recentActivity.length - 1 ? 'pb-5 border-l-2 border-gray-100' : 'pb-1'
-                  }`}
-                >
-                  <div className="absolute -left-[9px] top-0.5 bg-white p-0.5 rounded-full">
-                    {activityIcon(item)}
+            <>
+              <div className="space-y-0">
+                {pagedActivity.map((item, i) => (
+                  <div
+                    key={i}
+                    className={`flex items-start relative pl-4 ml-3 ${
+                      i < pagedActivity.length - 1 ? 'pb-5 border-l-2 border-gray-100' : 'pb-1'
+                    }`}
+                  >
+                    <div className="absolute -left-[9px] top-0.5 bg-white p-0.5 rounded-full">
+                      {activityIcon(item)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-brand-textPrimary leading-snug">{item.label}</p>
+                      <p className="text-xs text-brand-textMuted mt-0.5">{timeAgo(item.occurred_at)}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-brand-textPrimary leading-snug">{item.label}</p>
-                    <p className="text-xs text-brand-textMuted mt-0.5">{timeAgo(item.occurred_at)}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+              <Pagination
+                page={activityPage}
+                pageSize={ACTIVITY_PAGE_SIZE}
+                total={recentActivity.length}
+                onPageChange={setActivityPage}
+                className="pt-2 border-t border-gray-50 mt-2"
+              />
+            </>
           )}
         </div>
       </div>
@@ -294,7 +317,7 @@ const Dashboard = () => {
                   </td>
                 </tr>
               ) : (
-                filteredJobs.map((job) => (
+                pagedJobs.map((job) => (
                   <tr key={`${job.type}-${job.id}`} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="bg-gray-100 text-brand-textPrimary px-2 py-1 rounded text-[10px] font-bold">#{job.id}</span>
@@ -317,6 +340,18 @@ const Dashboard = () => {
             </tbody>
           </table>
         </div>
+        {filteredJobs.length > 0 && (
+          <div className="px-6 border-t border-brand-border">
+            <Pagination
+              page={jobsPage}
+              pageSize={jobsPageSize}
+              total={filteredJobs.length}
+              onPageChange={setJobsPage}
+              onSizeChange={(s) => { setJobsPageSize(s); setJobsPage(1); }}
+              pageSizes={[5, 10, 25]}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BarChart2, Printer, RefreshCw, Search, X, ChevronDown, Eye } from 'lucide-react';
 import EmailAnalyticsModal from '../../components/shared/EmailAnalyticsModal';
+import Pagination from '../../components/shared/Pagination';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,8 @@ const EmailDeliveryReport = () => {
   const [precincts, setPrecincts]     = useState([]);
   const [loading, setLoading]         = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
+  const [analyticsPage, setAnalyticsPage]     = useState(1);
+  const [analyticsPageSize, setAnalyticsPageSize] = useState(10);
 
   const fetchData = async () => {
     setLoading(true);
@@ -316,7 +319,7 @@ const EmailDeliveryReport = () => {
                     No records found
                   </td>
                 </tr>
-              ) : filteredData.map((row) => (
+              ) : filteredData.slice((analyticsPage-1)*analyticsPageSize, analyticsPage*analyticsPageSize).map((row) => (
                 <tr key={row.job_id} className="hover:bg-gray-50 transition-colors">
 
                   {/* JOB ID */}
@@ -429,6 +432,17 @@ const EmailDeliveryReport = () => {
             </tbody>
           </table>
         </div>
+        {filteredData.length > 0 && (
+          <div className="px-6 border-t border-brand-border bg-white">
+            <Pagination
+              page={analyticsPage}
+              pageSize={analyticsPageSize}
+              total={filteredData.length}
+              onPageChange={setAnalyticsPage}
+              onSizeChange={(s) => { setAnalyticsPageSize(s); setAnalyticsPage(1); }}
+            />
+          </div>
+        )}
       </div>
 
       {/* ── Analytics detail modal ── */}
