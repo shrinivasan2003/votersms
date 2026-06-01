@@ -70,7 +70,7 @@ const PROVIDERS = [
   { key: 'groq',     label: 'Groq',         models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'] },
   { key: 'mistral',  label: 'Mistral AI',   models: ['mistral-large-latest', 'mistral-small-latest', 'open-mistral-7b'] },
   { key: 'together', label: 'Together AI',  models: ['meta-llama/Llama-3.3-70B-Instruct-Turbo', 'mistralai/Mixtral-8x7B-Instruct-v0.1', 'Qwen/Qwen2.5-72B-Instruct-Turbo'] },
-  { key: 'anthropic',label: 'Anthropic',    models: ['claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-8'] },
+  { key: 'anthropic',label: 'Anthropic',    models: ['claude-opus-4-5', 'claude-sonnet-4-5', 'claude-haiku-4-5'] },
   { key: 'gemini',   label: 'Google Gemini',models: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.0-flash'] },
 ];
 

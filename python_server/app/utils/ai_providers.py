@@ -59,7 +59,7 @@ PROVIDER_REGISTRY: dict[str, dict] = {
         "label":    "Anthropic",
         "base_url": "https://api.anthropic.com",
         "sdk":      "anthropic",
-        "models":   ["claude-sonnet-4-6", "claude-haiku-4-5-20251001", "claude-opus-4-8"],
+        "models":   ["claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5"],
     },
     "gemini": {
         "label":    "Google Gemini",
