@@ -103,12 +103,11 @@ const EmailJobs = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [jobsData, listsData, templatesData, providersData, analyticsData, settingsData] = await Promise.all([
+      const [jobsData, listsData, templatesData, providersData, settingsData] = await Promise.all([
         emailJobsApi.list(),
         listsApi.list(),
         emailTemplatesApi.list(),
         emailProvidersApi.list(),
-        emailAnalyticsApi.list().catch(() => []),
         customersApi.getMySettings(),
       ]);
       if (settingsData?.timezone) {
@@ -119,15 +118,18 @@ const EmailJobs = () => {
       setLists(Array.isArray(listsData)         ? listsData     : []);
       setTemplates(Array.isArray(templatesData) ? templatesData : []);
       setProviders(Array.isArray(providersData) ? providersData : []);
+    } catch (err) {
+    } finally {
+      setLoading(false);
+    }
+    // Load analytics separately — it's a heavy query and shouldn't block the initial render
+    emailAnalyticsApi.list().then(analyticsData => {
       if (Array.isArray(analyticsData)) {
         const map = {};
         analyticsData.forEach(a => { map[a.job_id] = a; });
         setAnalyticsMap(map);
       }
-    } catch (err) {
-    } finally {
-      setLoading(false);
-    }
+    }).catch(() => {});
   };
 
   const refreshJobs = useCallback(async () => {
