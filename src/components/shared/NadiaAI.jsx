@@ -221,6 +221,8 @@ function WizardProgressBar({ done, total, color }) {
 }
 
 function WizardView({ navigate }) {
+  const location = useLocation();
+
   const [campaignKey, setCampaignKey] = useState(() => loadCampaignKey());
   const [doneSteps,   setDoneSteps]   = useState({});
 
@@ -239,6 +241,23 @@ function WizardView({ navigate }) {
   useEffect(() => {
     saveCampaignKey(campaignKey);
   }, [campaignKey]);
+
+  // ── Auto-mark step as done when user visits its page ──
+  // Only fires when a campaign is actively selected (user is following the wizard).
+  useEffect(() => {
+    if (!campaignKey) return;
+    const wizard = WIZARDS[campaignKey];
+    if (!wizard) return;
+    const matchIndex = wizard.steps.findIndex(s => s.route === location.pathname);
+    if (matchIndex === -1) return;
+    setDoneSteps(prev => {
+      const existing = new Set(prev[campaignKey] || []);
+      if (existing.has(matchIndex)) return prev; // already done — skip re-render
+      const updated = new Set(existing);
+      updated.add(matchIndex);
+      return { ...prev, [campaignKey]: updated };
+    });
+  }, [location.pathname, campaignKey]);
 
   const wizard      = campaignKey ? WIZARDS[campaignKey] : null;
   const done        = wizard ? (doneSteps[campaignKey] || new Set()) : new Set();
