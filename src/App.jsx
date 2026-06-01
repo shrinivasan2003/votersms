@@ -1,10 +1,12 @@
 import { Toaster } from 'react-hot-toast';
 import AppRouter from './AppRouter';
 import { AuthProvider } from './contexts/AuthContext';
+import { NadiaProvider } from './contexts/NadiaContext';
 
 function App() {
   return (
     <AuthProvider>
+      <NadiaProvider>
       <AppRouter />
       <Toaster
         position="top-right"
@@ -28,6 +30,7 @@ function App() {
           },
         }}
       />
+      </NadiaProvider>
     </AuthProvider>
   );
 }

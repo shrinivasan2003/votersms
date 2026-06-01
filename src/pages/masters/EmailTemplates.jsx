@@ -4,7 +4,7 @@ import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
 import ListTagPicker from '../../components/shared/ListTagPicker';
-import NadiaAI from '../../components/shared/NadiaAI';
+import { useNadia } from '../../contexts/NadiaContext';
 
 const EmailTemplates = () => {
   const [view, setView] = useState('list'); // 'list' or 'add'
@@ -14,8 +14,9 @@ const EmailTemplates = () => {
   const bodyRef    = useRef(null);
   const subjectRef = useRef(null);
   const [format, setFormat]             = useState('Plain Text');
-  const [metaTags, setMetaTags]         = useState([]);   // tags from selected list in ListTagPicker
+  const [metaTags, setMetaTags]         = useState([]);
   const [nadiaFormat, setNadiaFormat]   = useState('Plain Text');
+  const { setEmailContext }             = useNadia();
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -86,6 +87,23 @@ const EmailTemplates = () => {
     if (bodyRef.current)    bodyRef.current.value    = body;
     setFormat(nadiaFormat);
   };
+
+  // Register email context with global Nadia when form is open; clear on close
+  useEffect(() => {
+    if (view === 'add') {
+      setEmailContext({
+        variables: [
+          '{{FirstName}}', '{{LastName}}', '{{FullName}}',
+          ...metaTags.map(t => `{{${t.tag_key}}}`),
+        ],
+        onUseTemplate: handleNadiaUse,
+      });
+    } else {
+      setEmailContext(null);
+    }
+    return () => setEmailContext(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, metaTags, nadiaFormat]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -304,14 +322,7 @@ const EmailTemplates = () => {
           </form>
         </div>
 
-        {/* Nadia AI — floating assistant, visible on add/edit view */}
-        <NadiaAI
-          availableVariables={[
-            '{{FirstName}}', '{{LastName}}', '{{FullName}}',
-            ...metaTags.map(t => `{{${t.tag_key}}}`),
-          ]}
-          onUseTemplate={handleNadiaUse}
-        />
+        {/* Nadia AI lives globally in AppLayout — context registered via useEffect above */}
       </div>
     );
   }

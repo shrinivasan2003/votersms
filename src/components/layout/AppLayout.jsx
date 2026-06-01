@@ -4,6 +4,7 @@ import Header from './Header';
 import Sidebar from './Sidebar';
 import Footer from './Footer';
 import { useGlobalJobNotifications } from '../../hooks/useGlobalJobNotifications';
+import NadiaAI from '../shared/NadiaAI';
 
 const AppLayout = () => {
   const [isCollapsed, setIsCollapsed] = useState(true);
@@ -37,6 +38,9 @@ const AppLayout = () => {
           <Footer />
         </main>
       </div>
+
+      {/* Nadia AI — global floating assistant (wizard + email generator) */}
+      <NadiaAI />
     </div>
   );
 };
