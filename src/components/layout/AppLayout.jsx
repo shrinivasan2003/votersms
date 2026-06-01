@@ -18,13 +18,14 @@ const AppLayout = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-brand-bg">
-      <Header onToggleSidebar={toggleCollapsed} />
+      <Header />
 
       <div className="flex flex-1 pt-16">
         <Sidebar
           isCollapsed={isCollapsed}
           onItemClick={() => setIsCollapsed(true)}
           onExpand={() => setIsCollapsed(false)}
+          onToggle={toggleCollapsed}
         />
 
         {/* On mobile: no margin (sidebar is off-screen when collapsed, overlay when open)

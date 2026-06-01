@@ -5,7 +5,8 @@ import {
   Home, Users, MessageSquare, Mail,
   MessageCircle, Send, MailOpen, Inbox,
   Play, FileText,
-  ChevronDown, ChevronRight, Package, RefreshCw, Building2, Settings2
+  ChevronDown, ChevronRight, Package, RefreshCw, Building2, Settings2,
+  PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 
 const NavItem = ({ to, icon: Icon, label, isCollapsed, onItemClick }) => (
@@ -66,7 +67,7 @@ const NavGroup = ({ label, icon: Icon, children, isCollapsed, isOpen, onToggle, 
   );
 };
 
-const Sidebar = ({ isCollapsed, onItemClick, onExpand }) => {
+const Sidebar = ({ isCollapsed, onItemClick, onExpand, onToggle }) => {
   const [openGroup, setOpenGroup] = useState('Masters');
   const location = useLocation();
   useEffect(() => {
@@ -189,6 +190,25 @@ const Sidebar = ({ isCollapsed, onItemClick, onExpand }) => {
           </div>
 
         </nav>
+
+        {/* ── Toggle button — pinned to bottom ── */}
+        <div className="shrink-0 border-t border-brand-border p-2">
+          <button
+            onClick={onToggle}
+            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-gray-500
+              hover:bg-gray-100 hover:text-brand-navy transition-colors"
+          >
+            {isCollapsed
+              ? <PanelLeftOpen  size={18} />
+              : <>
+                  <PanelLeftClose size={18} />
+                  <span className="text-xs font-semibold transition-opacity duration-300">Collapse</span>
+                </>
+            }
+          </button>
+        </div>
+
       </aside>
     </>
   );
