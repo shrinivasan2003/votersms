@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Users, FileText, BarChart2, UserCheck,
   Upload, Circle, Filter, MessageSquare, Mail, MessageCircle,
-  CheckCircle2, XCircle, Loader2, Clock, UserPlus
+  CheckCircle2, XCircle, Loader2, Clock, UserPlus, ChevronDown,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +10,70 @@ import { dashboardApi } from '../api/dashboard';
 import StatCard from '../components/shared/StatCard';
 import Button from '../components/shared/Button';
 import Pagination from '../components/shared/Pagination';
+
+// ── View Analytics dropdown button ───────────────────────────────────────────
+
+const AnalyticsDropdown = () => {
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const options = [
+    { label: 'SMS Analytics',   icon: MessageSquare, route: '/sms-delivery-report',   color: 'text-indigo-500', bg: 'bg-indigo-50' },
+    { label: 'Email Analytics', icon: Mail,          route: '/email-delivery-report',  color: 'text-blue-500',   bg: 'bg-blue-50'   },
+  ];
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition-all
+          ${open
+            ? 'bg-brand-navy text-white border-brand-navy shadow-lg shadow-brand-navy/20'
+            : 'bg-white text-brand-textPrimary border-brand-border hover:border-brand-navy hover:text-brand-navy hover:shadow-sm'
+          }`}
+      >
+        <BarChart2 size={15} className={open ? 'text-white' : 'text-brand-blue'} />
+        View Analytics
+        <ChevronDown
+          size={14}
+          className={`transition-transform duration-200 ${open ? 'rotate-180 text-white' : 'text-gray-400'}`}
+        />
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl border border-brand-border shadow-xl shadow-black/10 overflow-hidden z-50 animate-fade-in">
+          <div className="px-3 pt-3 pb-1.5">
+            <p className="text-[10px] font-bold text-brand-textMuted uppercase tracking-widest">Select Report</p>
+          </div>
+          {options.map(({ label, icon: Icon, route, color, bg }) => (
+            <button
+              key={route}
+              onClick={() => { setOpen(false); navigate(route); }}
+              className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left group"
+            >
+              <div className={`w-8 h-8 rounded-xl ${bg} flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
+                <Icon size={15} className={color} />
+              </div>
+              <span className="text-sm font-semibold text-brand-textPrimary">{label}</span>
+            </button>
+          ))}
+          <div className="h-2" />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const Dashboard = () => {
   const auth = useAuth();
@@ -124,8 +188,8 @@ const Dashboard = () => {
             )}
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button variant="outlined" onClick={() => navigate('/sms-delivery-report')}>View Reports</Button>
+        <div className="flex gap-2 flex-wrap items-center">
+          <AnalyticsDropdown />
           <Button onClick={() => navigate('/sms-jobs')}>New Campaign</Button>
         </div>
       </div>
