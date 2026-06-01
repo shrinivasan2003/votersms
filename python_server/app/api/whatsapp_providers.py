@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut, WhatsappProviderOut
+from app.utils.crypto import encrypt_field
 
 router = APIRouter()
 
@@ -52,8 +53,8 @@ def create_whatsapp_provider(
             "code":        req.get('code'),
             "name":        req.get('name'),
             "type":        req.get('type', 'Twilio'),
-            "account_sid": req.get('account_sid'),
-            "auth_token":  req.get('auth_token'),
+            "account_sid": encrypt_field(req.get('account_sid')),
+            "auth_token":  encrypt_field(req.get('auth_token')),
             "from_number": req.get('from_number'),
             "status":      req.get('status', 'Active'),
             "customer_id": current_user.customer_id,
@@ -101,8 +102,8 @@ def update_whatsapp_provider(
             "type":        req.get('type'),
             "from_number": req.get('from_number'),
             "status":      req.get('status'),
-            "account_sid": req.get('account_sid') or None,
-            "auth_token":  req.get('auth_token')  or None,
+            "account_sid": encrypt_field(req.get('account_sid') or None),
+            "auth_token":  encrypt_field(req.get('auth_token')  or None),
             "id":          id,
             "cid":         current_user.customer_id,
         })

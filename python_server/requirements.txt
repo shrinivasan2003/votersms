@@ -9,6 +9,7 @@ PyJWT
 twilio
 httpx
 slowapi
+cryptography
 # Nadia AI provider SDKs
 openai>=1.0.0
 anthropic>=0.30.0

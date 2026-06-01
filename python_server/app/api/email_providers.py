@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut, EmailProviderOut
+from app.utils.crypto import encrypt_field
 
 router = APIRouter()
 
@@ -55,7 +56,7 @@ def create_email_provider(
             "smtp_host":    req.get('smtp_host'),
             "smtp_port":    req.get('smtp_port'),
             "smtp_user":    req.get('smtp_user'),
-            "smtp_pass":    req.get('smtp_pass'),
+            "smtp_pass":    encrypt_field(req.get('smtp_pass')),
             "config_email": req.get('config_email'),
             "status":       req.get('status', 'Active'),
             "customer_id":  current_user.customer_id,
@@ -107,7 +108,7 @@ def update_email_provider(
             "smtp_host":    req.get('smtp_host'),
             "smtp_port":    req.get('smtp_port'),
             "smtp_user":    req.get('smtp_user'),
-            "smtp_pass":    req.get('smtp_pass') or None,
+            "smtp_pass":    encrypt_field(req.get('smtp_pass') or None),
             "config_email": req.get('config_email'),
             "status":       req.get('status'),
             "id":           id,
