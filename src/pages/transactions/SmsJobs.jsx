@@ -36,6 +36,7 @@ import { useJobPolling } from '../../hooks/useJobPolling';
 import { smsJobsApi, smsTemplatesApi, smsProvidersApi } from '../../api/sms';
 import { listsApi } from '../../api/lists';
 import { customersApi } from '../../api/customers';
+import { useAuth } from '../../contexts/AuthContext';
 
 /* ── helper: display the recipient source in the table ── */
 const RecipientCell = ({ row }) => {
@@ -58,6 +59,7 @@ const SmsJobs = () => {
   const [customerTz, setCustomerTz] = useState('UTC');
   const [tzShort, setTzShort]       = useState('UTC');
   const [repeat, setRepeat]         = useState({ ...DEFAULT_REPEAT });
+  const { user }                    = useAuth();
 
   const fetchData = async () => {
     setLoading(true);
