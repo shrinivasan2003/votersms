@@ -1,8 +1,8 @@
 import { Link } from 'react-router-dom';
 import {
   MessageSquare, Mail, MessageCircle, BarChart2, Users, ShieldCheck,
-  ArrowRight, Zap, CheckCircle2, Bell, Send, TrendingUp, Lock,
-  ChevronDown,
+  ArrowRight, Zap, CheckCircle2, Send, TrendingUp, Lock,
+  ChevronDown, Sparkles, Bot, Wand2, FileText, Rocket,
 } from 'lucide-react';
 import PublicNavbar from '../components/layout/PublicNavbar';
 import PublicFooter from '../components/layout/PublicFooter';
@@ -18,10 +18,10 @@ const channels = [
 const features = [
   { icon: Send,       color: '#6366F1', bg: 'bg-indigo-50', label: 'Multi-Channel Campaigns',  desc: 'Send targeted messages via SMS, Email, and WhatsApp from one unified dashboard — no switching tools.' },
   { icon: Users,      color: '#3B82F6', bg: 'bg-blue-50',   label: 'Smart Voter Management',   desc: 'Organize recipients into lists, segments, and precincts. Reach the right people every time.' },
-  { icon: BarChart2,  color: '#F59E0B', bg: 'bg-amber-50',  label: 'Real-Time Analytics',      desc: 'Track delivery, open rates, and engagement live. Make data-driven decisions instantly.' },
-  { icon: Bell,       color: '#EC4899', bg: 'bg-pink-50',   label: 'Instant Notifications',    desc: 'Get notified the moment a campaign completes. Never miss a delivery update again.' },
+  { icon: BarChart2,  color: '#F59E0B', bg: 'bg-amber-50',  label: 'Analytics & Notifications', desc: 'Track delivery, open rates, and engagement live — and get notified the moment a campaign completes.' },
   { icon: Lock,       color: '#001F3F', bg: 'bg-slate-50',  label: 'Organization Isolation',   desc: "Each organization's data is fully encrypted and isolated. No cross-tenant access — ever." },
   { icon: TrendingUp, color: '#10B981', bg: 'bg-emerald-50', label: 'Scalable at Any Size',    desc: 'From hundreds to hundreds of thousands of recipients — scales with your campaign seamlessly.' },
+  { icon: Sparkles,   color: '#2563EB', bg: 'bg-blue-50',    label: 'Nadia AI Assistant',       desc: 'AI-powered email generation and guided campaign setup wizard — built right into the platform.' },
 ];
 
 const steps = [
@@ -115,6 +115,83 @@ const DashboardMock = () => (
   </div>
 );
 
+/* ── Nadia AI panel mock ─────────────────────────────────────────────────── */
+const NadiaMock = () => (
+  <div className="relative w-full max-w-[340px] mx-auto">
+    <div className="absolute inset-0 bg-purple-600/30 rounded-3xl blur-3xl scale-110" />
+    <div className="relative bg-gradient-to-b from-[#1a0533] to-[#0f0220] border border-white/15 rounded-2xl overflow-hidden shadow-2xl">
+
+      {/* Header */}
+      <div className="px-4 py-3 bg-gradient-to-r from-[#2d1060] to-[#1a0533] border-b border-white/10">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-b from-purple-500 to-purple-800 flex items-center justify-center ring-2 ring-purple-400/40">
+              <Bot size={15} className="text-white" />
+            </div>
+            <div>
+              <p className="text-white font-bold text-sm leading-tight">Nadia AI</p>
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                <span className="text-[10px] text-white/50">Your AI campaign assistant</span>
+              </div>
+            </div>
+          </div>
+          <Sparkles size={14} className="text-purple-400" />
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-white/10">
+        <div className="flex-1 py-2.5 text-center text-xs font-bold text-white border-b-2 border-blue-400 bg-white/5">🧭 Wizard</div>
+        <div className="flex-1 py-2.5 text-center text-xs font-bold text-white/35">✨ Generate Email</div>
+      </div>
+
+      {/* Wizard body */}
+      <div className="p-4 space-y-3">
+        <p className="text-[11px] text-white/50 leading-relaxed">Choose a campaign flow to get started:</p>
+
+        {/* Campaign options */}
+        {[
+          { Icon: Mail,          label: 'Email Campaign',    sub: '4 guided steps',  color: 'text-blue-400'   },
+          { Icon: MessageSquare, label: 'SMS Campaign',      sub: '4 guided steps',  color: 'text-green-400'  },
+          { Icon: FileText,      label: 'Just an Email Job', sub: '2 guided steps',  color: 'text-purple-400' },
+        ].map(({ Icon, label, sub, color }) => (
+          <div key={label} className="flex items-center gap-3 p-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all cursor-default">
+            <Icon size={15} className={color} />
+            <div className="flex-1">
+              <p className="text-xs font-bold text-white leading-tight">{label}</p>
+              <p className="text-[10px] text-white/30">{sub}</p>
+            </div>
+            <ChevronDown size={12} className="text-white/20 -rotate-90" />
+          </div>
+        ))}
+
+        {/* Step preview */}
+        <div className="mt-1 pt-3 border-t border-white/10 space-y-1.5">
+          <p className="text-[9px] font-bold text-white/30 uppercase tracking-wider">Step preview</p>
+          {[
+            { Icon: Users,    label: 'Add Recipients',   done: true  },
+            { Icon: FileText, label: 'Create Template',  done: false },
+            { Icon: Rocket,   label: 'Process & Send',   done: false },
+          ].map(({ Icon, label, done }, i) => (
+            <div key={i}>
+              <div className={`flex items-center gap-2 p-2 rounded-lg ${done ? 'bg-blue-500/15 border border-blue-400/20' : 'bg-white/5 border border-white/5'}`}>
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center ${done ? 'bg-blue-500' : 'bg-white/10'}`}>
+                  {done ? <CheckCircle2 size={11} className="text-white" /> : <span className="text-[9px] text-white/40 font-bold">{i + 1}</span>}
+                </div>
+                <Icon size={12} className={done ? 'text-blue-300' : 'text-white/30'} />
+                <span className={`text-[11px] font-semibold ${done ? 'text-blue-200' : 'text-white/50'}`}>{label}</span>
+                {done && <span className="ml-auto text-[9px] font-bold text-blue-300 bg-blue-500/15 px-1.5 py-0.5 rounded-full">Done</span>}
+              </div>
+              {i < 2 && <div className="flex justify-center"><div className="w-px h-2 bg-white/10" /></div>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
 /* ── Page ─────────────────────────────────────────────────────────────────── */
 const LandingPage = () => (
   <div className="min-h-screen bg-white flex flex-col font-sans overflow-x-hidden">
@@ -126,6 +203,7 @@ const LandingPage = () => (
           {[
             { label: 'How It Works', id: 'how-it-works' },
             { label: 'Features',     id: 'features'     },
+            { label: 'Nadia AI',     id: 'nadia-ai'     },
             { label: 'Why BallotDA', id: 'why-ballotda' },
           ].map(({ label, id }) => (
             <button
@@ -190,6 +268,10 @@ const LandingPage = () => (
               <div className="flex items-center gap-1.5 bg-white/8 border border-white/12 rounded-full px-3 py-1.5">
                 <BarChart2 size={12} className="text-amber-300" />
                 <span className="text-white/75 text-xs font-semibold">Analytics</span>
+              </div>
+              <div className="flex items-center gap-1.5 bg-white text-[#001F3F] rounded-full px-3 py-1.5 shadow-lg shadow-white/20">
+                <Sparkles size={12} className="text-indigo-600" />
+                <span className="text-[#001F3F] text-xs font-bold">Nadia AI</span>
               </div>
             </div>
 
@@ -305,6 +387,93 @@ const LandingPage = () => (
               <p className="text-gray-500 text-xs sm:text-sm leading-relaxed">{desc}</p>
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+
+    {/* ── Nadia AI ─────────────────────────────────────────────────────────── */}
+    <section id="nadia-ai" className="scroll-mt-16 py-12 sm:py-20 px-4 sm:px-6 bg-[#001F3F] overflow-hidden relative">
+      {/* Background glows — blue/indigo matching platform navy */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-[140px]" />
+        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-indigo-500/10 rounded-full blur-[120px]" />
+        <div className="absolute inset-0 opacity-[0.03]" style={{
+          backgroundImage: 'radial-gradient(circle at 1.5px 1.5px, white 1.5px, transparent 0)',
+          backgroundSize: '32px 32px',
+        }} />
+      </div>
+
+      <div className="max-w-6xl mx-auto relative z-10">
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+
+          {/* Left — text */}
+          <div className="text-center lg:text-left">
+            <div className="inline-flex items-center gap-2 bg-blue-500/15 border border-blue-400/25 rounded-full px-3.5 py-1.5 text-xs font-semibold text-blue-300 mb-5">
+              <Sparkles size={12} />
+              AI-Powered Feature
+            </div>
+
+            <h2 className="text-3xl sm:text-4xl lg:text-[44px] font-extrabold text-white leading-tight mb-4">
+              Meet{' '}
+              <span className="bg-gradient-to-r from-blue-300 via-indigo-300 to-violet-300 bg-clip-text text-transparent">
+                Nadia AI
+              </span>
+              <br />your campaign assistant
+            </h2>
+
+            <p className="text-blue-200/60 text-base sm:text-lg leading-relaxed mb-8 max-w-lg mx-auto lg:mx-0">
+              Nadia is built directly into the platform — no third-party tools, no integrations needed. She guides your team through campaign setup and generates professional email content on demand.
+            </p>
+
+            {/* Two capability cards */}
+            <div className="space-y-3 mb-8">
+              {[
+                {
+                  Icon:  Wand2,
+                  title: 'Campaign Setup Wizard',
+                  desc:  'Step-by-step guided flows for Email and SMS campaigns. Visual progress tracking, navigation shortcuts, and persistent progress across sessions.',
+                  color: 'text-blue-300',
+                  bg:    'bg-blue-500/10 border-blue-400/20',
+                },
+                {
+                  Icon:  Sparkles,
+                  title: 'AI Email Generator',
+                  desc:  'Describe your email in plain language. Nadia generates two professional variations — subject line and body — ready to use instantly.',
+                  color: 'text-indigo-300',
+                  bg:    'bg-indigo-500/10 border-indigo-400/20',
+                },
+              ].map(({ Icon, title, desc, color, bg }) => (
+                <div key={title} className={`flex items-start gap-3.5 p-4 rounded-xl border ${bg} text-left`}>
+                  <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
+                    <Icon size={16} className={color} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white mb-0.5">{title}</p>
+                    <p className="text-xs text-blue-200/40 leading-relaxed">{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Providers */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold text-blue-200/25 uppercase tracking-widest text-center lg:text-left">
+                Bring your own key — supports 7 AI providers
+              </p>
+              <div className="flex flex-wrap gap-2 justify-center lg:justify-start">
+                {['DeepSeek', 'OpenAI', 'Anthropic', 'Gemini', 'Groq', 'Mistral', 'Together AI'].map(p => (
+                  <span key={p} className="px-2.5 py-1 bg-white/5 border border-white/10 rounded-lg text-[11px] font-semibold text-blue-200/50">
+                    {p}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right — mock panel */}
+          <div className="flex justify-center lg:justify-end">
+            <NadiaMock />
+          </div>
         </div>
       </div>
     </section>
