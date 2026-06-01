@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Building2, Mail, User, Lock, Eye, EyeOff, CheckCircle, XCircle } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { customersApi } from '../../api/customers';
 
 const Customers = () => {
-  const { getAuthHeaders } = useAuth();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -19,8 +18,8 @@ const Customers = () => {
 
   const fetchCustomers = async () => {
     try {
-      const res = await fetch('/api/customers', { headers: getAuthHeaders() });
-      if (res.ok) setCustomers(await res.json());
+      const data = await customersApi.list();
+      setCustomers(Array.isArray(data) ? data : []);
     } catch {
       showToast('Failed to load customers', 'error');
     } finally {
@@ -34,27 +33,18 @@ const Customers = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const res = await fetch('/api/customers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify(form),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showToast(
-          data.email_sent
-            ? `Customer created & welcome email sent to ${form.email}`
-            : 'Customer created (email not configured — credentials not sent)',
-          data.email_sent ? 'success' : 'warning'
-        );
-        setShowModal(false);
-        setForm({ name: '', email: '', username: '', password: '' });
-        fetchCustomers();
-      } else {
-        showToast(data.detail || 'Failed to create customer', 'error');
-      }
-    } catch {
-      showToast('Network error', 'error');
+      const data = await customersApi.create(form);
+      showToast(
+        data.email_sent
+          ? `Customer created & welcome email sent to ${form.email}`
+          : 'Customer created (email not configured — credentials not sent)',
+        data.email_sent ? 'success' : 'warning'
+      );
+      setShowModal(false);
+      setForm({ name: '', email: '', username: '', password: '' });
+      fetchCustomers();
+    } catch (err) {
+      showToast(err.message || 'Failed to create customer', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -63,15 +53,11 @@ const Customers = () => {
   const handleDelete = async (id, name) => {
     if (!confirm(`Delete customer "${name}" and all associated users? This cannot be undone.`)) return;
     try {
-      const res = await fetch(`/api/customers/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
-      if (res.ok) {
-        showToast('Customer deleted');
-        setCustomers((prev) => prev.filter((c) => c.id !== id));
-      } else {
-        showToast('Failed to delete', 'error');
-      }
-    } catch {
-      showToast('Network error', 'error');
+      await customersApi.remove(id);
+      showToast('Customer deleted');
+      setCustomers((prev) => prev.filter((c) => c.id !== id));
+    } catch (err) {
+      showToast('Failed to delete', 'error');
     }
   };
 

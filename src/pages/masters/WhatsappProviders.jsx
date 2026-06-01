@@ -3,6 +3,7 @@ import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
 import { Pencil, Trash2, Eye, EyeOff } from 'lucide-react';
+import { whatsappProvidersApi } from '../../api/whatsapp';
 
 const WhatsappProviders = () => {
   const [view, setView] = useState('list'); // 'list' or 'add'
@@ -13,16 +14,12 @@ const WhatsappProviders = () => {
   const [showSid, setShowSid] = useState(false);
   const [showToken, setShowToken] = useState(false);
 
-  const API_URL = '/api/whatsapp-providers';
-
   const fetchProviders = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL);
-      const data = await res.json();
+      const data = await whatsappProvidersApi.list();
       setProviders(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to fetch providers:', err);
     } finally {
       setLoading(false);
     }
@@ -79,22 +76,16 @@ const WhatsappProviders = () => {
     };
 
     try {
-      const method = editingRow ? 'PUT' : 'POST';
-      const url = editingRow ? `${API_URL}/${editingRow.id}` : API_URL;
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-
-      if (res.ok) {
-        alert(`WhatsApp Provider ${editingRow ? 'updated' : 'created'} successfully!`);
-        fetchProviders();
-        handleBack();
+      if (editingRow) {
+        await whatsappProvidersApi.update(editingRow.id, data);
+      } else {
+        await whatsappProvidersApi.create(data);
       }
+      alert(`WhatsApp Provider ${editingRow ? 'updated' : 'created'} successfully!`);
+      fetchProviders();
+      handleBack();
     } catch (err) {
-      console.error('Save failed:', err);
+      alert(`Error: ${err.message || 'Failed to save provider.'}`);
     }
   };
 
@@ -102,10 +93,9 @@ const WhatsappProviders = () => {
     if (!window.confirm(`Are you sure you want to delete ${row.name}?`)) return;
     
     try {
-      const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
-      if (res.ok) fetchProviders();
+      await whatsappProvidersApi.remove(row.id);
+      fetchProviders();
     } catch (err) {
-      console.error('Delete failed:', err);
     }
   };
 

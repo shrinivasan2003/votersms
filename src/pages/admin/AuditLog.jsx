@@ -7,31 +7,7 @@ import {
   XCircle, Clock, Trash2, Edit3, Plus, BarChart3,
 } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
-
-// Token is stored as a plain string at 'auth_token' by AuthContext
-function getToken() {
-  return localStorage.getItem('auth_token') || '';
-}
-
-// All API calls use relative paths so Vite's proxy forwards them to the backend
-async function apiFetch(path, params = {}) {
-  const qs = new URLSearchParams();
-  Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && v !== '') qs.set(k, v);
-  });
-  const url = `/api${path}${qs.toString() ? `?${qs}` : ''}`;
-  const res = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${getToken()}`,
-    },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
+import { auditApi } from '../../api/audit';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -232,7 +208,7 @@ const AuditEventLog = ({ customerId, entityTypeFilter }) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiFetch(`/admin/audit/organizations/${customerId}/logs`, f);
+      const data = await auditApi.orgLogs(customerId, f);
       setLogs(data);
     } catch (e) {
       setError(e.message);
@@ -417,10 +393,10 @@ function OrgDetailPage({ org, onBack }) {
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
-    apiFetch(`/admin/audit/organizations/${org.customer_id}/summary`)
+    auditApi.orgSummary(org.customer_id)
       .then(setSummary)
       .finally(() => setLoadingSum(false));
-    apiFetch(`/admin/audit/organizations/${org.customer_id}/entities`)
+    auditApi.orgEntities(org.customer_id)
       .then(setEntities)
       .finally(() => setLoadingEnt(false));
   }, [org.customer_id]);
@@ -555,7 +531,7 @@ function OrgListPage({ onSelectOrg }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiFetch('/admin/audit/organizations');
+      const data = await auditApi.organizations();
       setOrgs(data);
     } catch (e) {
       setError(e.message);

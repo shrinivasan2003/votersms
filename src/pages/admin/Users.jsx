@@ -1,27 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Pencil, Trash2, ChevronDown } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { usersApi } from '../../api/users';
 
 const Users = () => {
   const [view, setView] = useState('list'); // 'list' or 'add'
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [editingRow, setEditingRow] = useState(null);
-  const { getAuthHeaders } = useAuth();
-
-  const API_URL = '/api/users';
-
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL, {
-        headers: { ...getAuthHeaders() },
-      });
-      const data = await res.json();
-      console.log('Fetched users:', data);
+      const data = await usersApi.list();
       setUsers(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to fetch users:', err);
     } finally {
       setLoading(false);
     }
@@ -51,43 +42,26 @@ const Users = () => {
       data.password = formData.get('password');
     }
 
-    console.log('Saving user data:', data);
 
     try {
-      const method = editingRow ? 'PUT' : 'POST';
-      const url = editingRow ? `${API_URL}/${editingRow.id}` : API_URL;
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify(data)
-      });
-
-      if (res.ok) {
-        console.log('User saved successfully');
-        await fetchUsers();
-        handleBack();
+      if (editingRow) {
+        await usersApi.update(editingRow.id, data);
       } else {
-        const errorData = await res.json();
-        console.error('Save failed:', errorData);
-        alert('Save failed. Please check the console for details.');
+        await usersApi.create(data);
       }
+      await fetchUsers();
+      handleBack();
     } catch (err) {
-      console.error('Save failed:', err);
-      alert('Network error. Is the server running?');
+      alert(`Save failed: ${err.message}`);
     }
   };
 
   const handleDelete = async (rowUser) => {
     if (!window.confirm(`Are you sure you want to delete user ${rowUser.username}?`)) return;
     try {
-      const res = await fetch(`${API_URL}/${rowUser.id}`, {
-        method: 'DELETE',
-        headers: { ...getAuthHeaders() },
-      });
-      if (res.ok) fetchUsers();
+      await usersApi.remove(rowUser.id);
+      fetchUsers();
     } catch (err) {
-      console.error('Delete failed:', err);
     }
   };
 

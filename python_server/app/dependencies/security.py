@@ -1,10 +1,12 @@
 import os
+import secrets
 from datetime import datetime, timedelta
 from typing import Generator
 
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -28,7 +30,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=JWT_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "jti": secrets.token_hex(16)})
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
     return encoded_jwt
 
@@ -43,6 +45,14 @@ def decode_access_token(token: str) -> dict:
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> UserOut:
     payload = decode_access_token(token)
+    jti = payload.get("jti")
+    if jti:
+        row = db.execute(
+            text("SELECT id FROM token_blacklist WHERE jti=:jti"),
+            {"jti": jti},
+        ).first()
+        if row:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked")
     user_id: int = payload.get("sub")
     if user_id is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")

@@ -1,9 +1,9 @@
-from fastapi import APIRouter, HTTPException, Body, Depends
+from fastapi import APIRouter, HTTPException, Body, Depends, Query
 from typing import List, Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 from app.dependencies.security import get_current_user
 from app.models import User as UserModel
 from app.utils.limits import check_limit
@@ -12,22 +12,16 @@ from app.utils.timezone import get_customer_timezone, naive_to_utc
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.get("/sms-jobs")
 def get_sms_jobs(
-    db: Session = Depends(_get_session),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=500),
+    db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     try:
-        cid_filter = "WHERE j.customer_id=:cid" if getattr(current_user, 'customer_id', None) else ""
-        params = {"cid": current_user.customer_id} if getattr(current_user, 'customer_id', None) else {}
-        result = db.execute(text(f"""
+        result = db.execute(text("""
             SELECT j.*,
                 p.name   AS precinct_name,
                 t.name   AS template_name,
@@ -61,9 +55,10 @@ def get_sms_jobs(
             LEFT JOIN sms_providers pr ON j.provider_id = pr.id
             LEFT JOIN contact_lists cl ON j.list_id     = cl.id
             LEFT JOIN voters        v  ON j.voter_id    = v.id
-            {cid_filter}
+            WHERE (:cid IS NULL OR j.customer_id = :cid)
             ORDER BY j.id DESC
-        """), params)
+            LIMIT :limit OFFSET :skip
+        """), {"cid": current_user.customer_id, "limit": limit, "skip": skip})
         return [dict(row._mapping) for row in result]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -71,7 +66,7 @@ def get_sms_jobs(
 @router.post("/sms-jobs")
 def create_sms_job(
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     try:
@@ -99,9 +94,28 @@ def create_sms_job(
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid scheduled_at format.")
 
+        if req.get('provider_id'):
+            p_row = db.execute(
+                text("SELECT id FROM sms_providers WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+                {"id": req['provider_id'], "cid": cid},
+            ).fetchone()
+            if not p_row:
+                raise HTTPException(status_code=400, detail="Invalid provider")
+
+        if req.get('list_id'):
+            l_row = db.execute(
+                text("SELECT id FROM contact_lists WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+                {"id": req['list_id'], "cid": cid},
+            ).fetchone()
+            if not l_row:
+                raise HTTPException(status_code=400, detail="Invalid contact list")
+
         template_name = None
         if req.get('template_id'):
-            t_row = db.execute(text("SELECT name FROM sms_templates WHERE id=:id"), {"id": req['template_id']}).fetchone()
+            t_row = db.execute(
+                text("SELECT name FROM sms_templates WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+                {"id": req['template_id'], "cid": cid},
+            ).fetchone()
             template_name = t_row.name if t_row else None
 
         result = db.execute(
@@ -146,11 +160,18 @@ def create_sms_job(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/sms-jobs/{id}")
-def delete_sms_job(id: int, db: Session = Depends(_get_session), current_user = Depends(get_current_user)):
+def delete_sms_job(id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     try:
-        old_row = db.execute(text("SELECT * FROM sms_jobs WHERE id=:id"), {"id": id}).fetchone()
+        cid = getattr(current_user, 'customer_id', None)
+        old_row = db.execute(
+            text("SELECT * FROM sms_jobs WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+            {"id": id, "cid": cid},
+        ).fetchone()
         old_vals = dict(old_row._mapping) if old_row else None
-        db.execute(text("DELETE FROM sms_jobs WHERE id=:id"), {"id": id})
+        db.execute(
+            text("DELETE FROM sms_jobs WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+            {"id": id, "cid": cid},
+        )
         db.commit()
         cid = (old_vals or {}).get('customer_id') or getattr(current_user, 'customer_id', None)
         log_audit(db, cid, 'sms_job', id, (old_vals or {}).get('name'), 'DELETE', current_user, old_values=old_vals)
@@ -163,7 +184,7 @@ def delete_sms_job(id: int, db: Session = Depends(_get_session), current_user = 
 def update_sms_job(
     id: int,
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
     if getattr(current_user, "role", "").lower() != "admin":
@@ -181,10 +202,11 @@ def update_sms_job(
                     status       = :status,
                     list_id      = :list_id,
                     voter_id     = :voter_id
-                WHERE id = :id
+                WHERE id = :id AND (customer_id=:cid OR :cid IS NULL)
             """),
             {
                 "id":           id,
+                "cid":          getattr(current_user, 'customer_id', None),
                 "precinct_id":  req.get('precinct_id')  or None,
                 "template_id":  req.get('template_id'),
                 "provider_id":  req.get('provider_id')  or None,

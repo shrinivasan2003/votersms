@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { BarChart2, Printer, Search, X, Calendar, ChevronDown, Eye } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
+import { smsDeliveryApi, smsJobsApi } from '../../api/sms';
+import { precinctsApi } from '../../api/voters';
 
 const SmsDeliveryReport = () => {
   const [filters, setFilters] = useState({
@@ -28,22 +30,17 @@ const SmsDeliveryReport = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [statsRes, jobsRes, precinctsRes] = await Promise.all([
-        fetch('/api/sms-delivery-stats'),
-        fetch('/api/sms-jobs'),
-        fetch('/api/precincts')
+      const [statsData, jobsData, precinctsData] = await Promise.all([
+        smsDeliveryApi.stats(),
+        smsJobsApi.list(),
+        precinctsApi.list(),
       ]);
-      const statsData = await statsRes.json();
-      const jobsData = await jobsRes.json();
-      const precinctsData = await precinctsRes.json();
-      
-      setStats(statsData);
+      setStats(statsData || {});
       const data = Array.isArray(jobsData) ? jobsData : [];
       setReportData(data);
       setFilteredData(data);
       setPrecincts(Array.isArray(precinctsData) ? precinctsData : []);
     } catch (err) {
-      console.error('Failed to fetch report data:', err);
     } finally {
       setLoading(false);
     }

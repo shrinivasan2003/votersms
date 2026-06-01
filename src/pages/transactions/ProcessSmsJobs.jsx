@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Play, RefreshCw, Loader2, Info } from 'lucide-react';
 import Button from '../../components/shared/Button';
-import { useAuth } from '../../contexts/AuthContext';
+import { smsJobsApi } from '../../api/sms';
+import { processJobsApi } from '../../api/jobs';
 
 const ProcessJobs = () => {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -10,20 +11,14 @@ const ProcessJobs = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [processError, setProcessError] = useState('');
   const [batchSize, setBatchSize] = useState(100);
-  const { getAuthHeaders } = useAuth();
-
-  const API_URL = '/api/sms-jobs';
 
   const fetchPendingJobs = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL);
-      const data = await res.json();
-      // Filter for pending status if needed, otherwise show all for demo
+      const data = await smsJobsApi.list();
       const pending = Array.isArray(data) ? data.filter(j => j.status === 'Pending') : [];
       setPendingJobs(pending);
     } catch (err) {
-      console.error('Failed to fetch jobs:', err);
     } finally {
       setTimeout(() => setLoading(false), 500);
     }
@@ -39,25 +34,12 @@ const ProcessJobs = () => {
     setProcessError('');
 
     try {
-      const res = await fetch('/api/process-jobs/process', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders(),
-        },
-        body: JSON.stringify({ job_type: 'sms', batch_size: batchSize }),
-      });
-
-      if (res.ok) {
-        setShowSuccess(true);
-        fetchPendingJobs();
-        setTimeout(() => setShowSuccess(false), 4000);
-      } else {
-        const err = await res.json();
-        setProcessError(err.detail || 'Processing failed. Check server logs.');
-      }
+      await processJobsApi.process({ job_type: 'sms', batch_size: batchSize });
+      setShowSuccess(true);
+      fetchPendingJobs();
+      setTimeout(() => setShowSuccess(false), 4000);
     } catch (err) {
-      setProcessError('Network error. Is the server running?');
+      setProcessError(err.message || 'Processing failed. Check server logs.');
     } finally {
       setIsProcessing(false);
     }

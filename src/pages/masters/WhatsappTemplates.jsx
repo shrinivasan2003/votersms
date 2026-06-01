@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { whatsappTemplatesApi } from '../../api/whatsapp';
 import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
@@ -11,16 +12,13 @@ const WhatsappTemplates = () => {
   const [loading, setLoading] = useState(false);
   const bodyRef = useRef(null);
 
-  const API_URL = '/api/whatsapp-templates';
 
   const fetchTemplates = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL);
-      const data = await res.json();
+      const data = await whatsappTemplatesApi.list();
       setTemplates(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Failed to fetch templates:', err);
     } finally {
       setLoading(false);
     }
@@ -77,32 +75,23 @@ const WhatsappTemplates = () => {
     };
 
     try {
-      const method = editingRow ? 'PUT' : 'POST';
-      const url = editingRow ? `${API_URL}/${editingRow.id}` : API_URL;
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-
-      if (res.ok) {
-        fetchTemplates();
-        handleBack();
+      if (editingRow) {
+        await whatsappTemplatesApi.update(editingRow.id, data);
+      } else {
+        await whatsappTemplatesApi.create(data);
       }
+      fetchTemplates();
+      handleBack();
     } catch (err) {
-      console.error('Save failed:', err);
     }
   };
 
   const handleDelete = async (row) => {
     if (!window.confirm(`Are you sure you want to delete ${row.name}?`)) return;
-    
     try {
-      const res = await fetch(`${API_URL}/${row.id}`, { method: 'DELETE' });
-      if (res.ok) fetchTemplates();
+      await whatsappTemplatesApi.remove(row.id);
+      fetchTemplates();
     } catch (err) {
-      console.error('Delete failed:', err);
     }
   };
 

@@ -2,22 +2,16 @@ from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.get("/counties")
 def get_counties(
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -35,7 +29,7 @@ def get_counties(
 @router.post("/counties")
 def create_county(
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -57,13 +51,12 @@ def create_county(
 def update_county(
     id: int,
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
         db.execute(
-            text(f"UPDATE counties SET code=:code, name=:name, state=:state, status=:status WHERE {where}"),
+            text("UPDATE counties SET code=:code, name=:name, state=:state, status=:status WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
             {"code": req.get('code'), "name": req.get('name'), "state": req.get('state'),
              "status": req.get('status'), "id": id, "cid": current_user.customer_id},
         )
@@ -76,12 +69,11 @@ def update_county(
 @router.delete("/counties/{id}")
 def delete_county(
     id: int,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
-        db.execute(text(f"DELETE FROM counties WHERE {where}"), {"id": id, "cid": current_user.customer_id})
+        db.execute(text("DELETE FROM counties WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id})
         db.commit()
         return {"message": "Deleted successfully"}
     except Exception as e:

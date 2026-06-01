@@ -71,15 +71,30 @@ def check_limit(db: Session, customer_id: int | None, limit_key: str, current: i
 
 # ── Usage counters ─────────────────────────────────────────────────────────────
 
+# Explicit whitelist — only these table names may be used in _count / _monthly_sum.
+# This prevents accidental f-string injection if the call site ever changes.
+_ALLOWED_COUNT_TABLES = frozenset({
+    "voters", "contact_lists",
+    "sms_templates", "email_templates", "whatsapp_templates",
+    "sms_jobs", "email_jobs", "whatsapp_jobs",
+})
+
+
 def _count(db: Session, table: str, customer_id: int) -> int:
+    if table not in _ALLOWED_COUNT_TABLES:
+        raise ValueError(f"_count called with unknown table: {table!r}")
+    # Table name is validated against the whitelist above; values are parameterised.
     r = db.execute(
-        text(f"SELECT COUNT(*) AS c FROM {table} WHERE customer_id=:cid"),
+        text(f"SELECT COUNT(*) AS c FROM {table} WHERE customer_id=:cid"),  # noqa: S608
         {"cid": customer_id},
     ).fetchone()
     return r.c if r else 0
 
 
 def _monthly_sum(db: Session, table: str, customer_id: int) -> int:
+    if table not in _ALLOWED_COUNT_TABLES:
+        raise ValueError(f"_monthly_sum called with unknown table: {table!r}")
+    # Table name is validated against the whitelist above; values are parameterised.
     r = db.execute(
         text(f"""
             SELECT COALESCE(SUM(recipients), 0) AS c
@@ -88,7 +103,7 @@ def _monthly_sum(db: Session, table: str, customer_id: int) -> int:
               AND status='Completed'
               AND YEAR(created_at)  = YEAR(NOW())
               AND MONTH(created_at) = MONTH(NOW())
-        """),
+        """),  # noqa: S608
         {"cid": customer_id},
     ).fetchone()
     return int(r.c) if r else 0

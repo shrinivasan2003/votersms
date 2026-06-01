@@ -16,6 +16,7 @@ import { useForm } from '../../hooks/useForm';
 import { customersApi } from '../../api/customers';
 import { customerLimitsApi } from '../../api/customerLimits';
 import { adminApi } from '../../api/admin';
+import { aiAdminApi } from '../../api/ai';
 import { CACHE_KEYS } from '../../config/constants';
 import FormField from '../../components/shared/FormField';
 import Pagination from '../../components/shared/Pagination';
@@ -575,16 +576,10 @@ function AIUsageTab() {
   const [showInfo, setShowInfo]   = useState(false);
   const { toast, showToast }      = useToast();
 
-  const token = localStorage.getItem('auth_token') || '';
-
   const fetchUsage = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/ai/admin/usage', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      const data = await aiAdminApi.getUsage();
       setRows(Array.isArray(data) ? data : []);
     } catch (err) {
       showToast(err.message || 'Failed to load AI usage data', 'error');
@@ -604,12 +599,7 @@ function AIUsageTab() {
     if (isNaN(val) || val < 0) { showToast('Enter a valid positive number', 'error'); return; }
     setSaving(prev => ({ ...prev, [cid]: true }));
     try {
-      const res = await fetch(`/api/ai/admin/usage/${cid}/limit`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ai_monthly_limit: val }),
-      });
-      if (!res.ok) throw new Error((await res.json()).detail || 'Failed');
+      await aiAdminApi.setLimit(cid, { ai_monthly_limit: val });
       showToast('Limit updated successfully');
       setEditing(prev => { const n = { ...prev }; delete n[cid]; return n; });
       fetchUsage();

@@ -8,6 +8,7 @@
  *   onClose – function to close the modal
  */
 import { useState, useEffect, useCallback } from 'react';
+import { emailAnalyticsApi } from '../../api/email';
 import { BarChart2, Monitor, Smartphone, Tablet, RefreshCw, CheckCircle2, XCircle, MousePointerClick, AlertTriangle, Mail } from 'lucide-react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -52,10 +53,9 @@ const EmailAnalyticsModal = ({ job, onClose }) => {
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch(`/api/email-analytics/${job.job_id}`)
-      .then((r) => r.json())
+    emailAnalyticsApi.get(job.job_id)
       .then(setData)
-      .catch(console.error)
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [job.job_id]);
 

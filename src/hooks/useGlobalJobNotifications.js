@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
+import { smsJobsApi } from '../api/sms';
+import { emailJobsApi } from '../api/email';
+import { whatsappJobsApi } from '../api/whatsapp';
 
 const INTERVAL_MS = 5000;
 
@@ -16,15 +19,10 @@ export function useGlobalJobNotifications() {
   useEffect(() => {
     const poll = async () => {
       try {
-        const [sr, er, wr] = await Promise.all([
-          fetch('/api/sms-jobs'),
-          fetch('/api/email-jobs'),
-          fetch('/api/whatsapp-jobs'),
-        ]);
         const [sms, email, wa] = await Promise.all([
-          sr.json().catch(() => []),
-          er.json().catch(() => []),
-          wr.json().catch(() => []),
+          smsJobsApi.list().catch(() => []),
+          emailJobsApi.list().catch(() => []),
+          whatsappJobsApi.list().catch(() => []),
         ]);
 
         const all = [

@@ -11,6 +11,9 @@ from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text
 
 from app.limiter import limiter
+from app.utils.logging_config import configure_logging
+
+configure_logging(os.getenv("LOG_LEVEL", "INFO"))
 
 # Import routers
 from app.api import (

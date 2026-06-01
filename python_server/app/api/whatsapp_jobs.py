@@ -1,9 +1,9 @@
-from fastapi import APIRouter, HTTPException, Body, Depends
+from fastapi import APIRouter, HTTPException, Body, Depends, Query
 from typing import Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 from app.utils.limits import check_limit
@@ -12,22 +12,16 @@ from app.utils.timezone import get_customer_timezone, naive_to_utc
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.get("/whatsapp-jobs")
 def get_whatsapp_jobs(
-    db: Session = Depends(_get_session),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=500),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        cid_filter = "WHERE j.customer_id=:cid" if current_user.customer_id else ""
-        params = {"cid": current_user.customer_id} if current_user.customer_id else {}
-        result = db.execute(text(f"""
+        result = db.execute(text("""
             SELECT j.*,
                 p.name   AS precinct_name,
                 t.name   AS template_name,
@@ -61,9 +55,10 @@ def get_whatsapp_jobs(
             LEFT JOIN whatsapp_providers pr ON j.provider_id = pr.id
             LEFT JOIN contact_lists      cl ON j.list_id     = cl.id
             LEFT JOIN voters             v  ON j.voter_id    = v.id
-            {cid_filter}
+            WHERE (:cid IS NULL OR j.customer_id = :cid)
             ORDER BY j.id DESC
-        """), params)
+            LIMIT :limit OFFSET :skip
+        """), {"cid": current_user.customer_id, "limit": limit, "skip": skip})
         return [dict(row._mapping) for row in result]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -71,7 +66,7 @@ def get_whatsapp_jobs(
 @router.post("/whatsapp-jobs")
 def create_whatsapp_job(
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -98,9 +93,28 @@ def create_whatsapp_job(
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid scheduled_at format.")
 
+        if req.get('provider_id'):
+            p_row = db.execute(
+                text("SELECT id FROM whatsapp_providers WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+                {"id": req['provider_id'], "cid": cid},
+            ).fetchone()
+            if not p_row:
+                raise HTTPException(status_code=400, detail="Invalid provider")
+
+        if req.get('list_id'):
+            l_row = db.execute(
+                text("SELECT id FROM contact_lists WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+                {"id": req['list_id'], "cid": cid},
+            ).fetchone()
+            if not l_row:
+                raise HTTPException(status_code=400, detail="Invalid contact list")
+
         template_name = None
         if req.get('template_id'):
-            t_row = db.execute(text("SELECT name FROM whatsapp_templates WHERE id=:id"), {"id": req['template_id']}).fetchone()
+            t_row = db.execute(
+                text("SELECT name FROM whatsapp_templates WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+                {"id": req['template_id'], "cid": cid},
+            ).fetchone()
             template_name = t_row.name if t_row else None
 
         result = db.execute(
@@ -137,14 +151,13 @@ def create_whatsapp_job(
 @router.delete("/whatsapp-jobs/{id}")
 def delete_whatsapp_job(
     id: int,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
-        old_row = db.execute(text(f"SELECT * FROM whatsapp_jobs WHERE {where}"), {"id": id, "cid": current_user.customer_id}).fetchone()
+        old_row = db.execute(text("SELECT * FROM whatsapp_jobs WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id}).fetchone()
         old_vals = dict(old_row._mapping) if old_row else None
-        db.execute(text(f"DELETE FROM whatsapp_jobs WHERE {where}"), {"id": id, "cid": current_user.customer_id})
+        db.execute(text("DELETE FROM whatsapp_jobs WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id})
         db.commit()
         cid = (old_vals or {}).get('customer_id') or current_user.customer_id
         log_audit(db, cid, 'whatsapp_job', id, (old_vals or {}).get('name'), 'DELETE', current_user, old_values=old_vals)

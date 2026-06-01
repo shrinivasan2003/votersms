@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Play, RefreshCw, Info, Loader2 } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
+import { smsJobsApi } from '../../api/sms';
+import { emailJobsApi } from '../../api/email';
+import { processJobsApi } from '../../api/jobs';
+import { customersApi } from '../../api/customers';
 
 // Parse a UTC datetime string from DB (may lack 'Z') as a proper UTC Date
 const parseUTC = (str) => {
@@ -24,7 +27,6 @@ const toLocalDisplay = (utcStr, ianaT) => {
 };
 
 const ProcessJobs = () => {
-  const { getAuthHeaders } = useAuth();
   const [jobId, setJobId] = useState('');
   const [batchSize, setBatchSize] = useState(100);
   const [jobType, setJobType] = useState('sms');
@@ -35,10 +37,8 @@ const ProcessJobs = () => {
   const [customerTz, setCustomerTz] = useState('UTC');
   const [tzShort, setTzShort] = useState('UTC');
 
-  // Fetch customer timezone once on mount
   useEffect(() => {
-    fetch('/api/customers/my-settings')
-      .then(r => r.json())
+    customersApi.getMySettings()
       .then(d => {
         if (d?.timezone) {
           setCustomerTz(d.timezone);
@@ -51,13 +51,10 @@ const ProcessJobs = () => {
   const fetchPendingJobs = async (type = jobType) => {
     setJobsLoading(true);
     try {
-      const endpoint = type === 'email' ? '/api/email-jobs' : '/api/sms-jobs';
-      const res = await fetch(endpoint);
-      const data = await res.json();
+      const data = await (type === 'email' ? emailJobsApi.list() : smsJobsApi.list());
       const pending = Array.isArray(data) ? data.filter(j => j.status === 'Pending') : [];
       setPendingJobs(pending);
     } catch (err) {
-      console.error('Failed to fetch pending jobs:', err);
     } finally {
       setJobsLoading(false);
     }
@@ -73,24 +70,15 @@ const ProcessJobs = () => {
     setMessage('');
     
     try {
-      const res = await fetch('/api/process-jobs/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({
-          job_id: jobId ? parseInt(jobId) : null,
-          batch_size: parseInt(batchSize),
-          job_type: jobType
-        })
+      const data = await processJobsApi.process({
+        job_id: jobId ? parseInt(jobId) : null,
+        batch_size: parseInt(batchSize),
+        job_type: jobType,
       });
-      const data = await res.json();
-      if (res.ok) {
-        setMessage(data.detail || 'Processing started');
-        fetchPendingJobs(jobType);
-      } else {
-        setMessage(`Error: ${data.detail || 'Unknown error'}`);
-      }
+      setMessage(data.detail || 'Processing started');
+      fetchPendingJobs(jobType);
     } catch (err) {
-      setMessage(`Failed to trigger job: ${err.message}`);
+      setMessage(`Error: ${err.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }

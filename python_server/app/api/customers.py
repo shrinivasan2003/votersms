@@ -1,11 +1,13 @@
 import os
+import secrets
+from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Depends, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Dict, Any
 
 from app.database import get_db
-from app.schemas import CustomerCreate, UserOut
+from app.schemas import CustomerCreate, UserOut, CustomerListItemOut
 from app.dependencies.security import get_current_user
 from app.utils.password import hash_password
 from app.utils.email import send_welcome_email
@@ -21,7 +23,7 @@ def _require_platform_admin(current_user: UserOut = Depends(get_current_user)):
     return current_user
 
 
-@router.get("/customers")
+@router.get("/customers", response_model=list[CustomerListItemOut])
 def list_customers(
     db: Session = Depends(get_db),
     _: UserOut = Depends(_require_platform_admin),
@@ -87,11 +89,28 @@ def create_customer(
     )
     db.commit()
 
-    # Send welcome email (non-blocking — failure doesn't abort the request)
+    # Generate a one-time password-set token (24 h expiry) and store it
+    reset_token = secrets.token_urlsafe(32)
+    reset_expires = datetime.utcnow() + timedelta(hours=24)
+    user_row = db.execute(
+        text("SELECT id FROM users WHERE username=:u AND customer_id=:cid"),
+        {"u": payload.username, "cid": customer_id},
+    ).first()
+    if user_row:
+        db.execute(
+            text("UPDATE users SET reset_token=:tok, reset_token_expires=:exp WHERE id=:id"),
+            {"tok": reset_token, "exp": reset_expires, "id": user_row.id},
+        )
+        db.commit()
+
+    app_url = os.getenv("APP_URL", "http://localhost:5173").rstrip("/")
+    reset_url = f"{app_url}/reset-password?token={reset_token}"
+
+    # Send welcome email with reset link (non-blocking — failure doesn't abort the request)
     email_sent = send_welcome_email(
         to_email=payload.email,
         username=payload.username,
-        password=payload.password,
+        reset_url=reset_url,
         customer_name=payload.organization_name,
     )
 

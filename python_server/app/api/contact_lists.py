@@ -12,7 +12,7 @@ POST   /api/contact-lists/{list_id}/members          — add one member  {voter_
 DELETE /api/contact-lists/{list_id}/members/{voter_id} — remove one member
 POST   /api/contact-lists/{list_id}/members/bulk     — bulk add [{email|voter_id}, ...]
 """
-from fastapi import APIRouter, HTTPException, Body, Depends
+from fastapi import APIRouter, HTTPException, Body, Depends, Query
 from typing import Dict, Any, List
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -52,6 +52,8 @@ def get_master_count(
 
 @router.get("/contact-lists")
 def get_contact_lists(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
@@ -65,7 +67,8 @@ def get_contact_lists(
                 WHERE cl.customer_id=:cid
                 GROUP BY cl.id
                 ORDER BY cl.id DESC
-            """), {"cid": cid})
+                LIMIT :limit OFFSET :skip
+            """), {"cid": cid, "limit": limit, "skip": skip})
         else:
             result = db.execute(text("""
                 SELECT cl.*, COUNT(lm.id) AS member_count
@@ -73,7 +76,8 @@ def get_contact_lists(
                 LEFT JOIN list_members lm ON cl.id = lm.list_id
                 GROUP BY cl.id
                 ORDER BY cl.id DESC
-            """))
+                LIMIT :limit OFFSET :skip
+            """), {"limit": limit, "skip": skip})
         return [dict(row._mapping) for row in result]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -279,10 +283,9 @@ def bulk_add_list_members(
             email = item.get("email", "").strip()
 
             if not voter_id and email:
-                cid_clause = "AND customer_id=:cid" if cid is not None else ""
                 row = db.execute(
-                    text(f"SELECT id FROM voters WHERE LOWER(email)=LOWER(:email) {cid_clause} LIMIT 1"),
-                    {"email": email, "cid": cid} if cid is not None else {"email": email}
+                    text("SELECT id FROM voters WHERE LOWER(email)=LOWER(:email) AND (:cid IS NULL OR customer_id=:cid) LIMIT 1"),
+                    {"email": email, "cid": cid}
                 ).fetchone()
                 if row:
                     voter_id = row[0]

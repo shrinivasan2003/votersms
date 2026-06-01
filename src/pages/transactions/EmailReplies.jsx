@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Mail, MailOpen, Trash2, RefreshCw, User, Briefcase, Clock, Inbox } from 'lucide-react';
 import Badge from '../../components/shared/Badge';
-
-const API_URL = '/api/email-replies';
+import { emailRepliesApi } from '../../api/email';
 
 const formatDate = (raw) => {
   if (!raw) return '—';
@@ -47,15 +46,12 @@ const EmailReplies = () => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const res  = await fetch(API_URL);
-      const data = await res.json();
+      const data = await emailRepliesApi.list();
       if (Array.isArray(data)) {
         setReplies(data);
-        // keep selected in sync
         setSelected(prev => prev ? (data.find(r => r.id === prev.id) ?? prev) : prev);
       }
     } catch (err) {
-      console.error('Failed to fetch email replies:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -67,10 +63,10 @@ const EmailReplies = () => {
   const markRead = useCallback(async (reply) => {
     if (reply.is_read) return;
     try {
-      await fetch(`${API_URL}/${reply.id}/read`, { method: 'PATCH' });
+      await emailRepliesApi.markRead(reply.id);
       setReplies(prev => prev.map(r => r.id === reply.id ? { ...r, is_read: 1 } : r));
       setSelected(prev => prev?.id === reply.id ? { ...prev, is_read: 1 } : prev);
-    } catch (err) { console.error(err); }
+    } catch (_err) { }
   }, []);
 
   const handleSelect = useCallback((reply) => {
@@ -82,10 +78,10 @@ const EmailReplies = () => {
     e?.stopPropagation();
     if (!window.confirm('Delete this reply?')) return;
     try {
-      await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+      await emailRepliesApi.remove(id);
       setReplies(prev => prev.filter(r => r.id !== id));
       setSelected(prev => prev?.id === id ? null : prev);
-    } catch (err) { console.error(err); }
+    } catch (_err) { }
   }, []);
 
   const unreadCount = replies.filter(r => !r.is_read).length;

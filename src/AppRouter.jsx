@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import AppLayout from './components/layout/AppLayout';
+import ErrorBoundary from './components/shared/ErrorBoundary';
 
 // Lazy-loaded pages
 const LandingPage         = lazy(() => import('./pages/LandingPage'));
@@ -34,6 +35,11 @@ const PageLoader = () => (
   </div>
 );
 
+/** Wraps a page element in a per-page error boundary */
+const P = ({ children }) => (
+  <ErrorBoundary variant="page">{children}</ErrorBoundary>
+);
+
 /** Route accessible only by logged-in customer users (has customer_id) */
 const CustomerRoute = ({ children }) => {
   const { user } = useAuth();
@@ -47,39 +53,39 @@ const AppRouter = () => (
     <Suspense fallback={<PageLoader />}>
       <Routes>
         {/* Public */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/"               element={<P><LandingPage /></P>} />
+        <Route path="/login"          element={<P><Login /></P>} />
+        <Route path="/forgot-password"element={<P><ForgotPassword /></P>} />
+        <Route path="/reset-password" element={<P><ResetPasswordPage /></P>} />
 
         {/* Admin Panel — standalone, no main-app layout */}
-        <Route path="/admin" element={<AdminPanel />} />
+        <Route path="/admin" element={<P><AdminPanel /></P>} />
 
         {/* Main application — customer users only */}
         <Route path="/" element={<CustomerRoute><AppLayout /></CustomerRoute>}>
-          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="dashboard" element={<P><Dashboard /></P>} />
 
           {/* Masters */}
-          <Route path="organization"        element={<Organization />} />
-          <Route path="voters"              element={<Voters />} />
-          <Route path="recipients"          element={<Voters />} />
-          <Route path="sms-templates"       element={<SmsTemplates />} />
-          <Route path="email-templates"     element={<EmailTemplates />} />
-          <Route path="whatsapp-templates"  element={<WhatsappTemplates />} />
+          <Route path="organization"       element={<P><Organization /></P>} />
+          <Route path="voters"             element={<P><Voters /></P>} />
+          <Route path="recipients"         element={<P><Voters /></P>} />
+          <Route path="sms-templates"      element={<P><SmsTemplates /></P>} />
+          <Route path="email-templates"    element={<P><EmailTemplates /></P>} />
+          <Route path="whatsapp-templates" element={<P><WhatsappTemplates /></P>} />
 
           {/* Transactions */}
-          <Route path="sms-jobs"      element={<SmsJobs />} />
-          <Route path="email-jobs"     element={<EmailJobs />} />
-          <Route path="email-replies"  element={<EmailReplies />} />
-          <Route path="whatsapp-jobs" element={<WhatsappJobs />} />
-          <Route path="process-job"   element={<ProcessJobs />} />
+          <Route path="sms-jobs"           element={<P><SmsJobs /></P>} />
+          <Route path="email-jobs"         element={<P><EmailJobs /></P>} />
+          <Route path="email-replies"      element={<P><EmailReplies /></P>} />
+          <Route path="whatsapp-jobs"      element={<P><WhatsappJobs /></P>} />
+          <Route path="process-job"        element={<P><ProcessJobs /></P>} />
 
           {/* Reports */}
-          <Route path="sms-delivery-report"   element={<SmsDeliveryReport />} />
-          <Route path="email-delivery-report" element={<EmailDeliveryReport />} />
+          <Route path="sms-delivery-report"   element={<P><SmsDeliveryReport /></P>} />
+          <Route path="email-delivery-report" element={<P><EmailDeliveryReport /></P>} />
 
           {/* Configuration */}
-          <Route path="configuration" element={<Configuration />} />
+          <Route path="configuration" element={<P><Configuration /></P>} />
         </Route>
 
         <Route path="*" element={<Navigate to="/" replace />} />

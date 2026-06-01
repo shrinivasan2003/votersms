@@ -20,7 +20,7 @@ import logging
 from fastapi import APIRouter, Request, Query, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -28,19 +28,13 @@ router = APIRouter()
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 @router.post("/email-inbound")
 async def receive_inbound_email(
     request: Request,
     secret: str = Query(default=""),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
 ):
     # ── Secret validation ────────────────────────────────────────────────────
     if WEBHOOK_SECRET and secret != WEBHOOK_SECRET:
@@ -134,7 +128,7 @@ async def receive_inbound_email(
 
 @router.get("/email-replies")
 def get_email_replies(
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user=Depends(__import__("app.dependencies.security", fromlist=["get_current_user"]).get_current_user),
 ):
     """Return all inbound replies for the current organisation."""
@@ -173,14 +167,13 @@ def get_email_replies(
 @router.patch("/email-replies/{reply_id}/read")
 def mark_reply_read(
     reply_id: int,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user=Depends(__import__("app.dependencies.security", fromlist=["get_current_user"]).get_current_user),
 ):
     """Mark a reply as read."""
     try:
-        where = "id=:rid AND (customer_id=:cid OR :cid IS NULL)"
         db.execute(
-            text(f"UPDATE email_replies SET is_read=1 WHERE {where}"),
+            text("UPDATE email_replies SET is_read=1 WHERE id=:rid AND (customer_id=:cid OR :cid IS NULL)"),
             {"rid": reply_id, "cid": current_user.customer_id},
         )
         db.commit()
@@ -193,12 +186,14 @@ def mark_reply_read(
 @router.delete("/email-replies/{reply_id}")
 def delete_reply(
     reply_id: int,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user=Depends(__import__("app.dependencies.security", fromlist=["get_current_user"]).get_current_user),
 ):
     try:
-        where = "id=:rid AND (customer_id=:cid OR :cid IS NULL)"
-        db.execute(text(f"DELETE FROM email_replies WHERE {where}"), {"rid": reply_id, "cid": current_user.customer_id})
+        db.execute(
+            text("DELETE FROM email_replies WHERE id=:rid AND (customer_id=:cid OR :cid IS NULL)"),
+            {"rid": reply_id, "cid": current_user.customer_id},
+        )
         db.commit()
         return {"status": "ok"}
     except Exception as e:

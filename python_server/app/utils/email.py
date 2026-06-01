@@ -6,8 +6,8 @@ def _app_url() -> str:
     return os.getenv("APP_URL", "http://localhost:5173").rstrip("/")
 
 
-def send_welcome_email(to_email: str, username: str, password: str, customer_name: str) -> bool:
-    """Send a welcome email via Postmark. Returns True on success."""
+def send_welcome_email(to_email: str, username: str, reset_url: str, customer_name: str) -> bool:
+    """Send a welcome email with a one-time password-set link via Postmark. Returns True on success."""
     api_key = os.getenv("POSTMARK_API_KEY", "")
     if not api_key or api_key == "POSTMARK_API_KEY_HERE":
         return False
@@ -26,21 +26,19 @@ def send_welcome_email(to_email: str, username: str, password: str, customer_nam
         </div>
         <div style="padding: 40px;">
           <p style="color: #374151; font-size: 16px; margin: 0 0 20px;">
-            Hi there! Your customer account for <strong>{customer_name}</strong> has been set up.
-            Here are your login credentials:
+            Hi there! Your account for <strong>{customer_name}</strong> has been set up.
+            Your username is <strong>{username}</strong>.
           </p>
-          <div style="background: #f1f5f9; border-radius: 8px; padding: 20px 24px; margin: 0 0 24px;">
-            <p style="margin: 0 0 4px; color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase;">Username</p>
-            <p style="margin: 0 0 16px; color: #0f172a; font-size: 18px; font-weight: 700;">{username}</p>
-            <p style="margin: 0 0 4px; color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase;">Password</p>
-            <p style="margin: 0; color: #0f172a; font-size: 18px; font-weight: 700;">{password}</p>
-          </div>
-          <p style="color: #6b7280; font-size: 14px; margin: 0 0 24px;">
-            Please change your password after your first login for security.
+          <p style="color: #374151; font-size: 15px; margin: 0 0 24px;">
+            Click the button below to set your password and activate your account.
+            This link expires in <strong>24 hours</strong>.
           </p>
-          <a href="{_app_url()}/login" style="display: inline-block; background: #001F3F; color: #fff;
+          <a href="{reset_url}" style="display: inline-block; background: #001F3F; color: #fff;
              text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 700;
-             font-size: 15px;">Login to BallotDA</a>
+             font-size: 15px;">Set Your Password</a>
+          <p style="color: #9ca3af; font-size: 13px; margin: 24px 0 0;">
+            If you weren't expecting this email, you can safely ignore it.
+          </p>
         </div>
         <div style="background: #f8fafc; padding: 20px 40px; text-align: center; border-top: 1px solid #e2e8f0;">
           <p style="color: #94a3b8; font-size: 12px; margin: 0;">

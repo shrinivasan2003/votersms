@@ -3,17 +3,11 @@ from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 from app.services.message_processor import process_sms_job, process_email_job
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 class ProcessJobRequest(BaseModel):
     job_id: Optional[int] = None
@@ -24,7 +18,7 @@ class ProcessJobRequest(BaseModel):
 def trigger_process_jobs(
     request: ProcessJobRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
 ):
     if request.job_type not in ("sms", "email"):
         raise HTTPException(status_code=400, detail="job_type must be 'sms' or 'email'")

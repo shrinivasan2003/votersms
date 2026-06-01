@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Tags } from 'lucide-react';
+import { listsApi } from '../../api/lists';
 
 const ListTagPicker = ({ textareaRef, onTagsChange }) => {
   const [lists, setLists] = useState([]);
@@ -7,20 +8,14 @@ const ListTagPicker = ({ textareaRef, onTagsChange }) => {
   const [tags, setTags] = useState([]);
 
   useEffect(() => {
-    fetch('/api/contact-lists')
-      .then(r => r.json())
+    listsApi.list()
       .then(data => setLists(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!selectedListId) {
-      setTags([]);
-      onTagsChange?.([]);
-      return;
-    }
-    fetch(`/api/contact-lists/${selectedListId}/meta-tags`)
-      .then(r => r.json())
+    if (!selectedListId) { setTags([]); onTagsChange?.([]); return; }
+    listsApi.metaTags(selectedListId)
       .then(data => {
         const arr = Array.isArray(data) ? data : [];
         setTags(arr);

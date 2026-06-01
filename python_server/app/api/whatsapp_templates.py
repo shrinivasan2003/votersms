@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException, Body, Depends
+from fastapi import APIRouter, HTTPException, Body, Depends, Query
 from typing import Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 from app.utils.limits import check_limit
@@ -10,26 +10,22 @@ from app.utils.audit import log_audit
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.get("/whatsapp-templates")
 def get_whatsapp_templates(
-    db: Session = Depends(_get_session),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
         if current_user.customer_id:
             result = db.execute(
-                text("SELECT * FROM whatsapp_templates WHERE customer_id=:cid ORDER BY id DESC"),
-                {"cid": current_user.customer_id},
+                text("SELECT * FROM whatsapp_templates WHERE customer_id=:cid ORDER BY id DESC LIMIT :limit OFFSET :skip"),
+                {"cid": current_user.customer_id, "limit": limit, "skip": skip},
             )
         else:
-            result = db.execute(text("SELECT * FROM whatsapp_templates ORDER BY id DESC"))
+            result = db.execute(text("SELECT * FROM whatsapp_templates ORDER BY id DESC LIMIT :limit OFFSET :skip"), {"limit": limit, "skip": skip})
         return [dict(row._mapping) for row in result]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -37,7 +33,7 @@ def get_whatsapp_templates(
 @router.post("/whatsapp-templates")
 def create_whatsapp_template(
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -69,15 +65,14 @@ def create_whatsapp_template(
 def update_whatsapp_template(
     id: int,
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
-        old_row = db.execute(text(f"SELECT * FROM whatsapp_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id}).fetchone()
+        old_row = db.execute(text("SELECT * FROM whatsapp_templates WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id}).fetchone()
         old_vals = dict(old_row._mapping) if old_row else None
         db.execute(
-            text(f"UPDATE whatsapp_templates SET code=:code, name=:name, body=:body, status=:status WHERE {where}"),
+            text("UPDATE whatsapp_templates SET code=:code, name=:name, body=:body, status=:status WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
             {"code": req.get('code'), "name": req.get('name'), "body": req.get('body'),
              "status": req.get('status'), "id": id, "cid": current_user.customer_id},
         )
@@ -92,14 +87,13 @@ def update_whatsapp_template(
 @router.delete("/whatsapp-templates/{id}")
 def delete_whatsapp_template(
     id: int,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
-        where = "id=:id AND (customer_id=:cid OR :cid IS NULL)"
-        old_row = db.execute(text(f"SELECT * FROM whatsapp_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id}).fetchone()
+        old_row = db.execute(text("SELECT * FROM whatsapp_templates WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id}).fetchone()
         old_vals = dict(old_row._mapping) if old_row else None
-        db.execute(text(f"DELETE FROM whatsapp_templates WHERE {where}"), {"id": id, "cid": current_user.customer_id})
+        db.execute(text("DELETE FROM whatsapp_templates WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id})
         db.commit()
         cid = (old_vals or {}).get('customer_id') or current_user.customer_id
         log_audit(db, cid, 'whatsapp_template', id, (old_vals or {}).get('name'), 'DELETE', current_user, old_values=old_vals)

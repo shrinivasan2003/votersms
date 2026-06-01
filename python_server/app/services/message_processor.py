@@ -3,6 +3,7 @@ from sqlalchemy import text
 from app.database import SessionLocal
 from app.models import SmsJob, EmailJob, SmsProvider, EmailProvider, Precinct, Voter, SmsTemplate, EmailTemplate
 from app.utils.limits import _get_limits_row, _monthly_sum, _emails_this_month, DEFAULTS
+from app.utils.crypto import decrypt_field
 from twilio.rest import Client
 import httpx
 import logging
@@ -299,7 +300,7 @@ def process_sms_job(job_id: int):
                 db.commit()
                 return
 
-        twilio_client = Client(provider.account_sid, provider.auth_token)
+        twilio_client = Client(decrypt_field(provider.account_sid), decrypt_field(provider.auth_token))
         success_count = 0
         failed_count  = 0
 
@@ -408,7 +409,7 @@ def process_email_job(job_id: int):
         http_headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "X-Postmark-Server-Token": provider.smtp_pass,
+            "X-Postmark-Server-Token": decrypt_field(provider.smtp_pass),
         }
 
         success_count = 0

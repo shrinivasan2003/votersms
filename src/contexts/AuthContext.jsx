@@ -25,7 +25,9 @@ export const AuthProvider = ({ children }) => {
     return userData;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // Blacklist the token on the server (best-effort — don't block local logout on failure)
+    try { await authApi.logout(); } catch (_) { /* ignore */ }
     setUser(null);
     setAuthToken(null);
     localStorage.removeItem('user');

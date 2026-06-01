@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { BarChart2, Printer, RefreshCw, Search, X, ChevronDown, Eye } from 'lucide-react';
 import EmailAnalyticsModal from '../../components/shared/EmailAnalyticsModal';
 import Pagination from '../../components/shared/Pagination';
+import { emailAnalyticsApi } from '../../api/email';
+import { precinctsApi } from '../../api/voters';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -30,19 +32,15 @@ const EmailDeliveryReport = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [analyticsRes, precinctsRes] = await Promise.all([
-        fetch('/api/email-analytics'),
-        fetch('/api/precincts'),
+      const [analyticsData, precinctsData] = await Promise.all([
+        emailAnalyticsApi.list(),
+        precinctsApi.list(),
       ]);
-      const analyticsData = await analyticsRes.json();
-      const precinctsData = await precinctsRes.json();
-
       const data = Array.isArray(analyticsData) ? analyticsData : [];
       setReportData(data);
       setFilteredData(data);
       setPrecincts(Array.isArray(precinctsData) ? precinctsData : []);
     } catch (err) {
-      console.error('Failed to fetch email report data:', err);
     } finally {
       setLoading(false);
     }
