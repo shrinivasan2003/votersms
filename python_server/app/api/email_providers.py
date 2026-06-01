@@ -4,7 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.dependencies.security import get_current_user
-from app.schemas import UserOut
+from app.schemas import UserOut, EmailProviderOut
 
 router = APIRouter()
 
@@ -18,7 +18,7 @@ def _get_session():
 _SAFE_FIELDS = "id, code, name, type, smtp_host, smtp_port, smtp_user, config_email, status, customer_id"
 
 
-@router.get("/email-providers")
+@router.get("/email-providers", response_model=list[EmailProviderOut])
 def get_email_providers(
     db: Session = Depends(_get_session),
     current_user: UserOut = Depends(get_current_user),
@@ -36,7 +36,7 @@ def get_email_providers(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/email-providers")
+@router.post("/email-providers", response_model=EmailProviderOut)
 def create_email_provider(
     req: Dict[str, Any] = Body(...),
     db: Session = Depends(_get_session),
@@ -61,10 +61,18 @@ def create_email_provider(
             "customer_id":  current_user.customer_id,
         })
         db.commit()
-        safe = {k: req[k] for k in
-                ('code', 'name', 'type', 'smtp_host', 'smtp_port', 'smtp_user', 'config_email', 'status')
-                if k in req}
-        return {"id": result.lastrowid, **safe}
+        return {
+            "id":           result.lastrowid,
+            "code":         req.get('code'),
+            "name":         req.get('name'),
+            "type":         req.get('type'),
+            "smtp_host":    req.get('smtp_host'),
+            "smtp_port":    req.get('smtp_port'),
+            "smtp_user":    req.get('smtp_user'),
+            "config_email": req.get('config_email'),
+            "status":       req.get('status'),
+            "customer_id":  current_user.customer_id,
+        }
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -91,7 +99,7 @@ def update_email_provider(
                 smtp_pass    = CASE
                     WHEN :smtp_pass IS NOT NULL AND :smtp_pass <> ''
                     THEN :smtp_pass ELSE smtp_pass END
-            WHERE {where}
+            WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)
         """), {
             "code":         req.get('code'),
             "name":         req.get('name'),

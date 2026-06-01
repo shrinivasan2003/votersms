@@ -5,7 +5,7 @@ from sqlalchemy import text
 from typing import Dict, Any
 
 from app.database import get_db
-from app.schemas import CustomerCreate, UserOut
+from app.schemas import CustomerCreate, UserOut, CustomerListItemOut
 from app.dependencies.security import get_current_user
 from app.utils.password import hash_password
 from app.utils.email import send_welcome_email
@@ -21,7 +21,7 @@ def _require_platform_admin(current_user: UserOut = Depends(get_current_user)):
     return current_user
 
 
-@router.get("/customers")
+@router.get("/customers", response_model=list[CustomerListItemOut])
 def list_customers(
     db: Session = Depends(get_db),
     _: UserOut = Depends(_require_platform_admin),

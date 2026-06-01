@@ -4,7 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.dependencies.security import get_current_user
-from app.schemas import UserOut
+from app.schemas import UserOut, WhatsappProviderOut
 
 router = APIRouter()
 
@@ -18,7 +18,7 @@ def _get_session():
 _SAFE_FIELDS = "id, code, name, type, from_number, status, customer_id"
 
 
-@router.get("/whatsapp-providers")
+@router.get("/whatsapp-providers", response_model=list[WhatsappProviderOut])
 def get_whatsapp_providers(
     db: Session = Depends(_get_session),
     current_user: UserOut = Depends(get_current_user),
@@ -36,7 +36,7 @@ def get_whatsapp_providers(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/whatsapp-providers")
+@router.post("/whatsapp-providers", response_model=WhatsappProviderOut)
 def create_whatsapp_provider(
     req: Dict[str, Any] = Body(...),
     db: Session = Depends(_get_session),
@@ -59,8 +59,15 @@ def create_whatsapp_provider(
             "customer_id": current_user.customer_id,
         })
         db.commit()
-        safe = {k: req[k] for k in ('code', 'name', 'type', 'from_number', 'status') if k in req}
-        return {"id": result.lastrowid, **safe}
+        return {
+            "id":          result.lastrowid,
+            "code":        req.get('code'),
+            "name":        req.get('name'),
+            "type":        req.get('type'),
+            "from_number": req.get('from_number'),
+            "status":      req.get('status'),
+            "customer_id": current_user.customer_id,
+        }
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -87,7 +94,7 @@ def update_whatsapp_provider(
                 auth_token  = CASE
                     WHEN :auth_token IS NOT NULL AND :auth_token <> ''
                     THEN :auth_token  ELSE auth_token  END
-            WHERE {where}
+            WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)
         """), {
             "code":        req.get('code'),
             "name":        req.get('name'),

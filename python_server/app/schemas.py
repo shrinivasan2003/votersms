@@ -133,6 +133,60 @@ class CustomerOut(BaseModel):
     }
 
 
+class SmsProviderOut(BaseModel):
+    id: int
+    code: str
+    name: str
+    type: Optional[str] = None
+    priority: Optional[int] = None
+    from_number: Optional[str] = None
+    status: Optional[str] = None
+    customer_id: Optional[int] = None
+
+    model_config = {"from_attributes": True}
+
+
+class EmailProviderOut(BaseModel):
+    id: int
+    code: str
+    name: str
+    type: Optional[str] = None
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[str] = None
+    smtp_user: Optional[str] = None
+    config_email: Optional[str] = None
+    status: Optional[str] = None
+    customer_id: Optional[int] = None
+
+    model_config = {"from_attributes": True}
+
+
+class WhatsappProviderOut(BaseModel):
+    id: int
+    code: str
+    name: str
+    type: Optional[str] = None
+    from_number: Optional[str] = None
+    status: Optional[str] = None
+    customer_id: Optional[int] = None
+
+    model_config = {"from_attributes": True}
+
+
+class CustomerListItemOut(BaseModel):
+    id: int
+    username: str
+    email: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    status: Optional[str] = None
+    last_login: Optional[datetime] = None
+    customer_id: Optional[int] = None
+    organization_name: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
 class RoleCreate(BaseModel):
     code: str
     name: str
