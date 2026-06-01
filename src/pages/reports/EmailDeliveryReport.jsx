@@ -145,7 +145,7 @@ const EmailDeliveryReport = () => {
       {/* ── Page header ── */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 no-print">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">Email Delivery Report</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">Email Analytics</h1>
           <p className="text-sm text-brand-textMuted mt-1">
             View email job delivery statistics, open rates and click analytics
           </p>
