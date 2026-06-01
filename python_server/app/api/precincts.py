@@ -2,22 +2,16 @@ from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.get("/precincts")
 def get_precincts(
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -34,7 +28,7 @@ def get_precincts(
 
 @router.get("/precincts-detailed")
 def get_precincts_detailed(
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -63,7 +57,7 @@ def get_precincts_detailed(
 @router.post("/precincts")
 def create_precinct(
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -85,7 +79,7 @@ def create_precinct(
 def update_precinct(
     id: int,
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -103,7 +97,7 @@ def update_precinct(
 @router.delete("/precincts/{id}")
 def delete_precinct(
     id: int,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:

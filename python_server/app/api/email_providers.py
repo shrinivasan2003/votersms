@@ -2,26 +2,20 @@ from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut, EmailProviderOut
 from app.utils.crypto import encrypt_field
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 _SAFE_FIELDS = "id, code, name, type, smtp_host, smtp_port, smtp_user, config_email, status, customer_id"
 
 
 @router.get("/email-providers", response_model=list[EmailProviderOut])
 def get_email_providers(
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -40,7 +34,7 @@ def get_email_providers(
 @router.post("/email-providers", response_model=EmailProviderOut)
 def create_email_provider(
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -83,7 +77,7 @@ def create_email_provider(
 def update_email_provider(
     id: int,
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -124,7 +118,7 @@ def update_email_provider(
 @router.delete("/email-providers/{id}")
 def delete_email_provider(
     id: int,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:

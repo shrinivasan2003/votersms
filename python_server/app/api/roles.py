@@ -2,19 +2,13 @@ from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.get("/roles")
-def get_roles(db: Session = Depends(_get_session)):
+def get_roles(db: Session = Depends(get_db)):
     try:
         result = db.execute(text("SELECT * FROM roles ORDER BY id DESC"))
         return [dict(row._mapping) for row in result]
@@ -22,7 +16,7 @@ def get_roles(db: Session = Depends(_get_session)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/roles")
-def create_role(req: Dict[str, Any] = Body(...), db: Session = Depends(_get_session)):
+def create_role(req: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
     try:
         result = db.execute(
             text("INSERT INTO roles (code, name, description, status) VALUES (:code, :name, :description, :status)"),
@@ -40,7 +34,7 @@ def create_role(req: Dict[str, Any] = Body(...), db: Session = Depends(_get_sess
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/roles/{id}")
-def update_role(id: int, req: Dict[str, Any] = Body(...), db: Session = Depends(_get_session)):
+def update_role(id: int, req: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
     try:
         db.execute(
             text("UPDATE roles SET code=:code, name=:name, description=:description, status=:status WHERE id=:id"),
@@ -59,7 +53,7 @@ def update_role(id: int, req: Dict[str, Any] = Body(...), db: Session = Depends(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/roles/{id}")
-def delete_role(id: int, db: Session = Depends(_get_session)):
+def delete_role(id: int, db: Session = Depends(get_db)):
     try:
         db.execute(text("DELETE FROM role_permissions WHERE role_id=:id"), {"id": id})
         db.execute(text("DELETE FROM roles WHERE id=:id"), {"id": id})

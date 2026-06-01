@@ -18,7 +18,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Request, Query, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -26,12 +26,6 @@ router = APIRouter()
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def _norm_dt(val):
@@ -256,7 +250,7 @@ _HANDLERS = {
 async def receive_postmark_webhook(
     request: Request,
     secret: str = Query(default=""),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
 ):
     """
     Postmark calls this endpoint for every tracked event.

@@ -10,7 +10,7 @@ from app.database import get_db
 from app.models import User as UserModel
 from app.utils.password import verify_password, hash_password
 from app.utils.email import send_password_reset_email
-from app.dependencies.security import create_access_token
+from app.dependencies.security import create_access_token, decode_access_token, oauth2_scheme
 from app.limiter import limiter
 
 router = APIRouter()
@@ -153,3 +153,24 @@ def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
     )
     db.commit()
     return {"message": "Password updated successfully."}
+
+
+@router.post("/logout")
+def logout(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    """Invalidate the current JWT by storing its JTI in the blacklist."""
+    try:
+        payload = decode_access_token(token)
+        jti = payload.get("jti")
+        exp = payload.get("exp")
+        if jti and exp:
+            db.execute(
+                text("INSERT IGNORE INTO token_blacklist (jti, expires_at) VALUES (:jti, FROM_UNIXTIME(:exp))"),
+                {"jti": jti, "exp": exp},
+            )
+            db.commit()
+    except Exception:
+        pass  # If token is already invalid, logout silently succeeds
+    return {"message": "Logged out successfully."}

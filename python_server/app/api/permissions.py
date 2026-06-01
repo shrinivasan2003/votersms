@@ -2,19 +2,13 @@ from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any, List
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.get("/permissions")
-def get_permissions(db: Session = Depends(_get_session)):
+def get_permissions(db: Session = Depends(get_db)):
     try:
         result = db.execute(text("""
             SELECT p.*, COUNT(rp.role_id) AS role_count
@@ -28,7 +22,7 @@ def get_permissions(db: Session = Depends(_get_session)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/permissions/{id}")
-def get_permission(id: int, db: Session = Depends(_get_session)):
+def get_permission(id: int, db: Session = Depends(get_db)):
     try:
         result = db.execute(text("SELECT * FROM permissions WHERE id=:id"), {"id": id})
         row = result.fetchone()
@@ -46,7 +40,7 @@ def get_permission(id: int, db: Session = Depends(_get_session)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/permissions")
-def create_permission(req: Dict[str, Any] = Body(...), db: Session = Depends(_get_session)):
+def create_permission(req: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
     try:
         result = db.execute(
             text("""
@@ -83,7 +77,7 @@ def create_permission(req: Dict[str, Any] = Body(...), db: Session = Depends(_ge
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/permissions/{id}")
-def update_permission(id: int, req: Dict[str, Any] = Body(...), db: Session = Depends(_get_session)):
+def update_permission(id: int, req: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
     try:
         db.execute(
             text("""
@@ -123,7 +117,7 @@ def update_permission(id: int, req: Dict[str, Any] = Body(...), db: Session = De
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/permissions/{id}")
-def delete_permission(id: int, db: Session = Depends(_get_session)):
+def delete_permission(id: int, db: Session = Depends(get_db)):
     try:
         db.execute(text("DELETE FROM role_permissions WHERE permission_id=:id"), {"id": id})
         db.execute(text("DELETE FROM permissions WHERE id=:id"), {"id": id})

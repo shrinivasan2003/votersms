@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 from app.dependencies.security import get_current_user
 from app.models import User as UserModel
 from app.utils.limits import check_limit
@@ -12,18 +12,12 @@ from app.utils.timezone import get_customer_timezone, naive_to_utc
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.get("/sms-jobs")
 def get_sms_jobs(
     skip: int = Query(0, ge=0),
     limit: int = Query(200, ge=1, le=500),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     try:
@@ -72,7 +66,7 @@ def get_sms_jobs(
 @router.post("/sms-jobs")
 def create_sms_job(
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     try:
@@ -166,7 +160,7 @@ def create_sms_job(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/sms-jobs/{id}")
-def delete_sms_job(id: int, db: Session = Depends(_get_session), current_user = Depends(get_current_user)):
+def delete_sms_job(id: int, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     try:
         cid = getattr(current_user, 'customer_id', None)
         old_row = db.execute(
@@ -190,7 +184,7 @@ def delete_sms_job(id: int, db: Session = Depends(_get_session), current_user = 
 def update_sms_job(
     id: int,
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
     if getattr(current_user, "role", "").lower() != "admin":

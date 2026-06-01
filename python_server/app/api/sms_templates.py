@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Body, Depends, Query
 from typing import Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 from app.utils.limits import check_limit
@@ -10,18 +10,12 @@ from app.utils.audit import log_audit
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.get("/sms-templates")
 def get_sms_templates(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -39,7 +33,7 @@ def get_sms_templates(
 @router.post("/sms-templates")
 def create_sms_template(
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -71,7 +65,7 @@ def create_sms_template(
 def update_sms_template(
     id: int,
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -93,7 +87,7 @@ def update_sms_template(
 @router.delete("/sms-templates/{id}")
 def delete_sms_template(
     id: int,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:

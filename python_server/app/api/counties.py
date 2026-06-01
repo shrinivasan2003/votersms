@@ -2,22 +2,16 @@ from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.get("/counties")
 def get_counties(
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -35,7 +29,7 @@ def get_counties(
 @router.post("/counties")
 def create_county(
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -57,7 +51,7 @@ def create_county(
 def update_county(
     id: int,
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -75,7 +69,7 @@ def update_county(
 @router.delete("/counties/{id}")
 def delete_county(
     id: int,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:

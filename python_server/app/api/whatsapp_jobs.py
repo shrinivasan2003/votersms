@@ -3,7 +3,7 @@ from typing import Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 from app.utils.limits import check_limit
@@ -12,18 +12,12 @@ from app.utils.timezone import get_customer_timezone, naive_to_utc
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @router.get("/whatsapp-jobs")
 def get_whatsapp_jobs(
     skip: int = Query(0, ge=0),
     limit: int = Query(200, ge=1, le=500),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -72,7 +66,7 @@ def get_whatsapp_jobs(
 @router.post("/whatsapp-jobs")
 def create_whatsapp_job(
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -157,7 +151,7 @@ def create_whatsapp_job(
 @router.delete("/whatsapp-jobs/{id}")
 def delete_whatsapp_job(
     id: int,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:

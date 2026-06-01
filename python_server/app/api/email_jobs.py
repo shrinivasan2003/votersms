@@ -3,7 +3,7 @@ from typing import Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 from app.utils.limits import check_limit
@@ -12,12 +12,6 @@ from app.utils.timezone import get_customer_timezone, naive_to_utc
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 # ── Email Templates ────────────────────────────────────────────────────────────
 
@@ -25,7 +19,7 @@ def _get_session():
 def get_email_templates(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -43,7 +37,7 @@ def get_email_templates(
 @router.post("/email-templates")
 def create_email_template(
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -78,7 +72,7 @@ def create_email_template(
 def update_email_template(
     id: int,
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -101,7 +95,7 @@ def update_email_template(
 @router.delete("/email-templates/{id}")
 def delete_email_template(
     id: int,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -129,7 +123,7 @@ def delete_email_template(
 def get_email_jobs(
     skip: int = Query(0, ge=0),
     limit: int = Query(200, ge=1, le=500),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -178,7 +172,7 @@ def get_email_jobs(
 @router.post("/email-jobs")
 def create_email_job(
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -278,7 +272,7 @@ def create_email_job(
 @router.delete("/email-jobs/{id}")
 def delete_email_job(
     id: int,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:

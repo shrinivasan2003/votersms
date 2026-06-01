@@ -2,26 +2,20 @@ from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut, WhatsappProviderOut
 from app.utils.crypto import encrypt_field
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 _SAFE_FIELDS = "id, code, name, type, from_number, status, customer_id"
 
 
 @router.get("/whatsapp-providers", response_model=list[WhatsappProviderOut])
 def get_whatsapp_providers(
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -40,7 +34,7 @@ def get_whatsapp_providers(
 @router.post("/whatsapp-providers", response_model=WhatsappProviderOut)
 def create_whatsapp_provider(
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -78,7 +72,7 @@ def create_whatsapp_provider(
 def update_whatsapp_provider(
     id: int,
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -117,7 +111,7 @@ def update_whatsapp_provider(
 @router.delete("/whatsapp-providers/{id}")
 def delete_whatsapp_provider(
     id: int,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:

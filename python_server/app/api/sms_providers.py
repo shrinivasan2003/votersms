@@ -2,26 +2,20 @@ from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from app.database import get_db
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut, SmsProviderOut
 from app.utils.crypto import encrypt_field
 
 router = APIRouter()
 
-def _get_session():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 _SAFE_FIELDS = "id, code, name, type, priority, from_number, status, customer_id"
 
 
 @router.get("/sms-providers", response_model=list[SmsProviderOut])
 def get_sms_providers(
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -40,7 +34,7 @@ def get_sms_providers(
 @router.post("/sms-providers", response_model=SmsProviderOut)
 def create_sms_provider(
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -80,7 +74,7 @@ def create_sms_provider(
 def update_sms_provider(
     id: int,
     req: Dict[str, Any] = Body(...),
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
@@ -121,7 +115,7 @@ def update_sms_provider(
 @router.delete("/sms-providers/{id}")
 def delete_sms_provider(
     id: int,
-    db: Session = Depends(_get_session),
+    db: Session = Depends(get_db),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
