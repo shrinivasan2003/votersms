@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body, Depends
+from fastapi import APIRouter, HTTPException, Body, Depends, Query
 from typing import Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy import text
@@ -21,6 +21,8 @@ def _get_session():
 
 @router.get("/whatsapp-jobs")
 def get_whatsapp_jobs(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=500),
     db: Session = Depends(_get_session),
     current_user: UserOut = Depends(get_current_user),
 ):
@@ -61,7 +63,8 @@ def get_whatsapp_jobs(
             LEFT JOIN voters             v  ON j.voter_id    = v.id
             WHERE (:cid IS NULL OR j.customer_id = :cid)
             ORDER BY j.id DESC
-        """), {"cid": current_user.customer_id})
+            LIMIT :limit OFFSET :skip
+        """), {"cid": current_user.customer_id, "limit": limit, "skip": skip})
         return [dict(row._mapping) for row in result]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

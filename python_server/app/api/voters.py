@@ -19,6 +19,8 @@ def _get_session():
 @router.get("/voters")
 def get_voters(
     search: Optional[str] = Query(None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(200, ge=1, le=500),
     db: Session = Depends(_get_session),
     current_user: UserOut = Depends(get_current_user),
 ):
@@ -35,8 +37,8 @@ def get_voters(
                    OR CONCAT(v.first_name, ' ', v.last_name) LIKE :q)
                 AND (:cid IS NULL OR v.customer_id = :cid)
                 ORDER BY v.first_name, v.last_name
-                LIMIT 50
-            """), {"q": q, "cid": cid})
+                LIMIT :limit OFFSET :skip
+            """), {"q": q, "cid": cid, "limit": limit, "skip": skip})
         else:
             result = db.execute(text("""
                 SELECT v.*, p.name as precinct_name
@@ -44,7 +46,8 @@ def get_voters(
                 LEFT JOIN precincts p ON v.precinct_id = p.id
                 WHERE (:cid IS NULL OR v.customer_id = :cid)
                 ORDER BY v.id DESC
-            """), {"cid": cid})
+                LIMIT :limit OFFSET :skip
+            """), {"cid": cid, "limit": limit, "skip": skip})
         return [dict(row._mapping) for row in result]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

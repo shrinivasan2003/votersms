@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body, Depends
+from fastapi import APIRouter, HTTPException, Body, Depends, Query
 from typing import Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -19,17 +19,19 @@ def _get_session():
 
 @router.get("/whatsapp-templates")
 def get_whatsapp_templates(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(_get_session),
     current_user: UserOut = Depends(get_current_user),
 ):
     try:
         if current_user.customer_id:
             result = db.execute(
-                text("SELECT * FROM whatsapp_templates WHERE customer_id=:cid ORDER BY id DESC"),
-                {"cid": current_user.customer_id},
+                text("SELECT * FROM whatsapp_templates WHERE customer_id=:cid ORDER BY id DESC LIMIT :limit OFFSET :skip"),
+                {"cid": current_user.customer_id, "limit": limit, "skip": skip},
             )
         else:
-            result = db.execute(text("SELECT * FROM whatsapp_templates ORDER BY id DESC"))
+            result = db.execute(text("SELECT * FROM whatsapp_templates ORDER BY id DESC LIMIT :limit OFFSET :skip"), {"limit": limit, "skip": skip})
         return [dict(row._mapping) for row in result]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
