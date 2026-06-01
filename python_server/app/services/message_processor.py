@@ -417,8 +417,13 @@ def process_email_job(job_id: int):
 
         with httpx.Client() as client:
             for voter in voters:
-                text_body = _substitute(template.body, voter, meta_by_voter.get(voter["id"], {}))
-                html_body    = _text_to_html(text_body)
+                substituted = _substitute(template.body, voter, meta_by_voter.get(voter["id"], {}))
+                if getattr(template, "type", "Plain Text") == "HTML":
+                    html_body = substituted
+                    text_body = ""
+                else:
+                    text_body = substituted
+                    html_body = _text_to_html(text_body)
                 from_address = (
                     f"{provider.smtp_user} <{provider.config_email}>"
                     if provider.smtp_user else provider.config_email
