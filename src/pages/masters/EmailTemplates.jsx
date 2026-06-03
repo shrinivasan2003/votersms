@@ -192,7 +192,7 @@ const EmailTemplates = () => {
                 ref={subjectRef}
                 type="text"
                 name="subject"
-                placeholder="Email subject line"
+                placeholder="Email subject line — supports {{FirstName}}, {{firmname}}, etc."
                 defaultValue={editingRow?.subject || ''}
                 className="block w-full rounded-lg border border-brand-border px-4 py-3 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue transition-all"
                 required
@@ -292,7 +292,7 @@ const EmailTemplates = () => {
                 </p>
                 <p className="text-gray-400">Example: <em>Dear {'{{FirstName}}'}, your ballot has been received.</em></p>
               </div>
-              <ListTagPicker textareaRef={bodyRef} onTagsChange={setMetaTags} />
+              <ListTagPicker textareaRef={bodyRef} secondaryRef={subjectRef} onTagsChange={setMetaTags} />
             </div>
 
             <div className="flex items-center space-x-3">

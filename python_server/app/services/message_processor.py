@@ -428,7 +428,8 @@ def process_email_job(job_id: int):
                     f"{provider.smtp_user} <{provider.config_email}>"
                     if provider.smtp_user else provider.config_email
                 )
-                subject = getattr(template, "subject", None) or template.name
+                raw_subject = getattr(template, "subject", None) or template.name
+                subject = _substitute(raw_subject, voter, meta_by_voter.get(voter["id"], {}))
 
                 import os as _os
                 _inbound_base = _os.getenv("INBOUND_EMAIL_ADDRESS", "")

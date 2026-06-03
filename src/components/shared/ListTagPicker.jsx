@@ -1,17 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Tags } from 'lucide-react';
 import { listsApi } from '../../api/lists';
 
-const ListTagPicker = ({ textareaRef, onTagsChange }) => {
+const ListTagPicker = ({ textareaRef, secondaryRef, onTagsChange }) => {
   const [lists, setLists] = useState([]);
   const [selectedListId, setSelectedListId] = useState('');
   const [tags, setTags] = useState([]);
+  const lastFocused = useRef(null);
 
   useEffect(() => {
     listsApi.list()
       .then(data => setLists(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, []);
+
+  // Track which field (primary or secondary) was last focused
+  useEffect(() => {
+    const refs = [textareaRef, secondaryRef].filter(r => r?.current);
+    const handlers = refs.map(r => {
+      const handler = () => { lastFocused.current = r; };
+      r.current.addEventListener('focus', handler);
+      return { el: r.current, handler };
+    });
+    return () => handlers.forEach(({ el, handler }) => el.removeEventListener('focus', handler));
+  }, [textareaRef, secondaryRef]);
 
   useEffect(() => {
     if (!selectedListId) { setTags([]); onTagsChange?.([]); return; }
@@ -25,7 +37,7 @@ const ListTagPicker = ({ textareaRef, onTagsChange }) => {
   }, [selectedListId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const insertTag = (tagKey) => {
-    const ta = textareaRef?.current;
+    const ta = lastFocused.current?.current ?? textareaRef?.current;
     if (!ta) return;
     const start = ta.selectionStart ?? ta.value.length;
     const end = ta.selectionEnd ?? ta.value.length;
