@@ -174,6 +174,7 @@ const Lists = () => {
       setSearchResults([]);
       fetchMembers(selectedList.id);
       setSelectedList(prev => ({ ...prev, member_count: (prev.member_count || 0) + 1 }));
+      setLists(prev => prev.map(l => l.id === selectedList.id ? { ...l, member_count: (l.member_count || 0) + 1 } : l));
       setTimeout(() => setAddMsg(''), 3000);
     } catch (err) {
       setAddError(err.message || 'Failed to add — recipient may already be in this list.');
@@ -187,6 +188,7 @@ const Lists = () => {
       await listsApi.removeMember(selectedList.id, voterId);
       fetchMembers(selectedList.id);
       setSelectedList(prev => ({ ...prev, member_count: Math.max((prev.member_count || 1) - 1, 0) }));
+      setLists(prev => prev.map(l => l.id === selectedList.id ? { ...l, member_count: Math.max((l.member_count || 1) - 1, 0) } : l));
     } catch (err) {
     }
   };
