@@ -33,7 +33,7 @@ const AppLayout = () => {
         <main className={`flex-1 flex flex-col min-h-full min-w-0 transition-all duration-300 ${
           isCollapsed ? 'ml-0 sm:ml-[60px]' : 'ml-0 sm:ml-[220px]'
         }`}>
-          <div className="p-3 sm:p-5 flex-1 min-w-0">
+          <div className="p-3 sm:p-5 pb-24 sm:pb-24 flex-1 min-w-0">
             <Outlet />
           </div>
           <Footer />

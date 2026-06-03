@@ -682,7 +682,7 @@ const NadiaAI = () => {
   return (
     <>
       {/* ── Floating avatar button ── */}
-      <div className={`fixed bottom-6 right-6 z-40 flex flex-col items-end gap-3 transition-all duration-700 ease-out
+      <div className={`fixed bottom-8 right-6 z-40 flex flex-col items-end gap-3 transition-all duration-700 ease-out
         ${visible ? 'translate-x-0 opacity-100' : 'translate-x-32 opacity-0'}`}>
 
         {!open && (
