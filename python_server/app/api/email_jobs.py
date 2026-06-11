@@ -1,14 +1,32 @@
-from fastapi import APIRouter, HTTPException, Body, Depends, Query
+from fastapi import APIRouter, HTTPException, Body, Depends, Query, UploadFile, File
 from typing import Dict, Any
 from datetime import datetime, timezone
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+import os, shutil, uuid
 from app.database import get_db
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 from app.utils.limits import check_limit
 from app.utils.audit import log_audit
 from app.utils.timezone import get_customer_timezone, naive_to_utc
+
+UPLOAD_DIR = "/opt/votersms/uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+ALLOWED_TYPES = {
+    "application/pdf":                                                   "pdf",
+    "image/jpeg":                                                        "jpg",
+    "image/png":                                                         "png",
+    "image/gif":                                                         "gif",
+    "image/webp":                                                        "webp",
+    "application/msword":                                                "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.ms-excel":                                          "xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":"xlsx",
+    "text/plain":                                                        "txt",
+}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 router = APIRouter()
 
@@ -280,6 +298,13 @@ def delete_email_job(
     try:
         old_row = db.execute(text("SELECT * FROM email_jobs WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id}).fetchone()
         old_vals = dict(old_row._mapping) if old_row else None
+        # Delete attachments from disk
+        attachments = db.execute(text("SELECT filepath FROM email_job_attachments WHERE job_id=:id"), {"id": id}).fetchall()
+        for a in attachments:
+            try:
+                if os.path.exists(a.filepath): os.remove(a.filepath)
+            except: pass
+        db.execute(text("DELETE FROM email_job_attachments WHERE job_id=:id"), {"id": id})
         db.execute(text("DELETE FROM email_jobs WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id})
         db.commit()
         cid = (old_vals or {}).get('customer_id') or current_user.customer_id
@@ -288,3 +313,113 @@ def delete_email_job(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Attachments ────────────────────────────────────────────────────────────────
+
+@router.get("/email-jobs/{job_id}/attachments")
+def list_attachments(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user),
+):
+    # Verify job belongs to user
+    job = db.execute(
+        text("SELECT id FROM email_jobs WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+        {"id": job_id, "cid": current_user.customer_id}
+    ).fetchone()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    rows = db.execute(
+        text("SELECT id, job_id, filename, content_type, file_size, created_at FROM email_job_attachments WHERE job_id=:jid ORDER BY id"),
+        {"jid": job_id}
+    ).fetchall()
+    return [dict(r._mapping) for r in rows]
+
+
+@router.post("/email-jobs/{job_id}/attachments")
+async def upload_attachment(
+    job_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user),
+):
+    # Verify job belongs to user
+    job = db.execute(
+        text("SELECT id FROM email_jobs WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+        {"id": job_id, "cid": current_user.customer_id}
+    ).fetchone()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Validate file type
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail=f"File type '{content_type}' not allowed. Allowed: PDF, Images, Word, Excel, Text.")
+
+    # Read file and check size
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB.")
+
+    # Save file to disk
+    ext       = ALLOWED_TYPES[content_type]
+    safe_name = f"{uuid.uuid4().hex}.{ext}"
+    filepath  = os.path.join(UPLOAD_DIR, safe_name)
+    with open(filepath, "wb") as f:
+        f.write(contents)
+
+    # Save metadata to DB
+    result = db.execute(
+        text("""
+            INSERT INTO email_job_attachments (job_id, filename, filepath, content_type, file_size)
+            VALUES (:job_id, :filename, :filepath, :content_type, :file_size)
+        """),
+        {
+            "job_id":       job_id,
+            "filename":     file.filename,
+            "filepath":     filepath,
+            "content_type": content_type,
+            "file_size":    len(contents),
+        }
+    )
+    db.commit()
+    return {
+        "id":           result.lastrowid,
+        "job_id":       job_id,
+        "filename":     file.filename,
+        "content_type": content_type,
+        "file_size":    len(contents),
+    }
+
+
+@router.delete("/email-jobs/{job_id}/attachments/{attachment_id}")
+def delete_attachment(
+    job_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user),
+):
+    # Verify job belongs to user
+    job = db.execute(
+        text("SELECT id FROM email_jobs WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+        {"id": job_id, "cid": current_user.customer_id}
+    ).fetchone()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    row = db.execute(
+        text("SELECT filepath FROM email_job_attachments WHERE id=:aid AND job_id=:jid"),
+        {"aid": attachment_id, "jid": job_id}
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    # Delete file from disk
+    try:
+        if os.path.exists(row.filepath): os.remove(row.filepath)
+    except: pass
+
+    db.execute(text("DELETE FROM email_job_attachments WHERE id=:aid"), {"aid": attachment_id})
+    db.commit()
+    return {"message": "Attachment deleted"}

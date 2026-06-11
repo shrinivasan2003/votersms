@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { BarChart2 } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { BarChart2, Paperclip, Trash2, Upload } from 'lucide-react';
 import DataTable from '../../components/shared/DataTable';
 import Button from '../../components/shared/Button';
 import Badge from '../../components/shared/Badge';
@@ -7,7 +7,7 @@ import RecipientPicker from '../../components/shared/RecipientPicker';
 import EmailAnalyticsModal from '../../components/shared/EmailAnalyticsModal';
 import RepeatScheduler, { DEFAULT_REPEAT } from '../../components/shared/RepeatScheduler';
 import { useJobPolling } from '../../hooks/useJobPolling';
-import { emailJobsApi, emailTemplatesApi, emailProvidersApi, emailAnalyticsApi } from '../../api/email';
+import { emailJobsApi, emailTemplatesApi, emailProvidersApi, emailAnalyticsApi, emailAttachmentsApi } from '../../api/email';
 import { listsApi } from '../../api/lists';
 import { customersApi } from '../../api/customers';
 
@@ -77,8 +77,143 @@ const toLocalDisplay = (utcStr, ianaT) => {
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
+// ── Attachment manager view ───────────────────────────────────────────────────
+const AttachmentManager = ({ job, onBack }) => {
+  const [attachments, setAttachments] = useState([]);
+  const [uploading, setUploading]     = useState(false);
+  const [error, setError]             = useState('');
+  const fileRef = useRef(null);
+
+  const load = async () => {
+    try {
+      const data = await emailAttachmentsApi.list(job.id);
+      setAttachments(Array.isArray(data) ? data : []);
+    } catch { setAttachments([]); }
+  };
+
+  useEffect(() => { load(); }, [job.id]);
+
+  const handleUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setError('');
+    setUploading(true);
+    try {
+      for (const file of files) {
+        await emailAttachmentsApi.upload(job.id, file);
+      }
+      await load();
+    } catch (err) {
+      setError(err.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  const handleDelete = async (attachId, name) => {
+    if (!window.confirm(`Remove "${name}"?`)) return;
+    try {
+      await emailAttachmentsApi.remove(job.id, attachId);
+      await load();
+    } catch (err) {
+      setError(err.message || 'Delete failed');
+    }
+  };
+
+  const fmtSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / 1048576).toFixed(1) + ' MB';
+  };
+
+  const fileIcon = (ct) => {
+    if (ct?.includes('pdf'))   return '📄';
+    if (ct?.includes('image')) return '🖼️';
+    if (ct?.includes('word') || ct?.includes('msword')) return '📝';
+    if (ct?.includes('excel') || ct?.includes('spreadsheet')) return '📊';
+    return '📎';
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">Attachments</h1>
+          <p className="text-sm text-brand-textMuted mt-1">
+            Job #{job.id}{job.name ? ` — ${job.name}` : ''}
+            &nbsp;·&nbsp;These files are sent to every recipient.
+          </p>
+        </div>
+        <button onClick={onBack} className="px-6 py-2 border border-gray-300 rounded-lg text-sm font-medium text-brand-textPrimary hover:bg-gray-50 transition-colors">
+          ← Back to Jobs
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-brand-border p-6 max-w-2xl">
+        {/* Upload area */}
+        <div
+          className="border-2 border-dashed border-brand-border rounded-lg p-8 text-center cursor-pointer hover:border-brand-blue transition-colors"
+          onClick={() => fileRef.current?.click()}
+        >
+          <Upload className="mx-auto mb-2 text-gray-400" size={32} />
+          <p className="text-sm font-medium text-brand-textPrimary">Click to upload files</p>
+          <p className="text-xs text-brand-textMuted mt-1">PDF, Images, Word, Excel, Text · Max 10 MB each</p>
+          <input
+            ref={fileRef}
+            type="file"
+            multiple
+            className="hidden"
+            accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.txt"
+            onChange={handleUpload}
+          />
+        </div>
+
+        {uploading && (
+          <div className="mt-4 flex items-center gap-2 text-sm text-brand-blue">
+            <span className="animate-spin inline-block w-4 h-4 border-2 border-brand-blue border-t-transparent rounded-full" />
+            Uploading…
+          </div>
+        )}
+
+        {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
+
+        {/* File list */}
+        {attachments.length > 0 && (
+          <ul className="mt-6 space-y-2">
+            {attachments.map(att => (
+              <li key={att.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-xl">{fileIcon(att.content_type)}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-brand-textPrimary truncate max-w-xs">{att.filename}</p>
+                    <p className="text-xs text-brand-textMuted">{fmtSize(att.file_size)} · {att.content_type}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleDelete(att.id, att.filename)}
+                  className="ml-4 p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                  title="Remove attachment"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {attachments.length === 0 && !uploading && (
+          <p className="mt-6 text-sm text-brand-textMuted text-center">No attachments yet.</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── Main component ────────────────────────────────────────────────────────────
 const EmailJobs = () => {
   const [view, setView]             = useState('list');
+  const [attachJob, setAttachJob]   = useState(null);
   const [jobs, setJobs]             = useState([]);
   const [lists, setLists]           = useState([]);
   const [templates, setTemplates]   = useState([]);
@@ -198,12 +333,22 @@ const EmailJobs = () => {
         const a = analyticsMap[row.id];
         const hasSent = a && (a.total_sent > 0 || a.unique_opens > 0);
         return (
-          <button
-            onClick={() => setSelectedJob({ job_id: row.id, template_name: row.template_name, precinct_name: row.precinct_name, list_name: row.list_name })}
-            className={`p-1 rounded transition-colors ${hasSent ? 'text-[#1a56db] hover:bg-blue-50' : 'text-gray-300 hover:text-gray-400'}`}
-          >
-            <BarChart2 size={16} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setSelectedJob({ job_id: row.id, template_name: row.template_name, precinct_name: row.precinct_name, list_name: row.list_name })}
+              className={`p-1 rounded transition-colors ${hasSent ? 'text-[#1a56db] hover:bg-blue-50' : 'text-gray-300 hover:text-gray-400'}`}
+              title="View analytics"
+            >
+              <BarChart2 size={16} />
+            </button>
+            <button
+              onClick={() => setAttachJob(row)}
+              className="p-1 rounded transition-colors text-gray-400 hover:text-amber-600 hover:bg-amber-50"
+              title="Manage attachments"
+            >
+              <Paperclip size={15} />
+            </button>
+          </div>
         );
       },
     },
@@ -261,6 +406,11 @@ const EmailJobs = () => {
       handleBack();
     } catch (err) { alert(err.message || 'Failed to create job'); }
   };
+
+  // ── Attachment manager ────────────────────────────────────────────────────
+  if (attachJob) {
+    return <AttachmentManager job={attachJob} onBack={() => setAttachJob(null)} />;
+  }
 
   // ── Create form ───────────────────────────────────────────────────────────
   if (view === 'add') {

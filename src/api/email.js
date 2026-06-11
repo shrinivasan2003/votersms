@@ -21,6 +21,24 @@ export const emailJobsApi = {
   remove: (id)         => del(`/api/email-jobs/${id}`),
 };
 
+export const emailAttachmentsApi = {
+  list:   (jobId)              => get(`/api/email-jobs/${jobId}/attachments`),
+  remove: (jobId, attachId)    => del(`/api/email-jobs/${jobId}/attachments/${attachId}`),
+  upload: (jobId, file)        => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return fetch(`/api/email-jobs/${jobId}/attachments`, {
+      method: 'POST',
+      body: fd,
+      // No Content-Type header — browser sets multipart boundary automatically
+    }).then(async res => {
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
+      return body;
+    });
+  },
+};
+
 export const emailRepliesApi = {
   list: (params = {})    => get('/api/email-replies' + _qs(params)),
   markRead: (id)         => put(`/api/email-replies/${id}/read`, {}),
