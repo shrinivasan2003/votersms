@@ -412,19 +412,25 @@ def process_email_job(job_id: int):
             "X-Postmark-Server-Token": decrypt_field(provider.smtp_pass),
         }
 
-        # ── Load attachments for this job ──────────────────────────────────
-        import base64 as _b64
-        attachment_rows = db.execute(
+        # ── Load attachments (template-level + job-level, merged) ─────────
+        import base64 as _b64, os as _os2
+        tpl_att_rows = db.execute(
+            text("SELECT filename, filepath, content_type FROM email_template_attachments WHERE template_id=:tid"),
+            {"tid": template.id}
+        ).fetchall()
+        job_att_rows = db.execute(
             text("SELECT filename, filepath, content_type FROM email_job_attachments WHERE job_id=:jid"),
             {"jid": job_id}
         ).fetchall()
         postmark_attachments = []
-        for att in attachment_rows:
+        seen_names = set()
+        for att in list(tpl_att_rows) + list(job_att_rows):
             try:
-                import os as _os2
                 if _os2.path.exists(att.filepath):
                     with open(att.filepath, "rb") as _f:
                         encoded = _b64.b64encode(_f.read()).decode("utf-8")
+                    # Job attachments override template attachments with same name
+                    seen_names.add(att.filename)
                     postmark_attachments.append({
                         "Name":        att.filename,
                         "Content":     encoded,

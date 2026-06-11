@@ -30,7 +30,23 @@ export const emailAttachmentsApi = {
     return fetch(`/api/email-jobs/${jobId}/attachments`, {
       method: 'POST',
       body: fd,
-      // No Content-Type header — browser sets multipart boundary automatically
+    }).then(async res => {
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);
+      return body;
+    });
+  },
+};
+
+export const emailTemplateAttachmentsApi = {
+  list:   (templateId)              => get(`/api/email-templates/${templateId}/attachments`),
+  remove: (templateId, attachId)    => del(`/api/email-templates/${templateId}/attachments/${attachId}`),
+  upload: (templateId, file)        => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return fetch(`/api/email-templates/${templateId}/attachments`, {
+      method: 'POST',
+      body: fd,
     }).then(async res => {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.detail || `HTTP ${res.status}`);

@@ -393,6 +393,108 @@ async def upload_attachment(
     }
 
 
+# ── Email Template Attachments ────────────────────────────────────────────────
+
+@router.get("/email-templates/{template_id}/attachments")
+def list_template_attachments(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user),
+):
+    tpl = db.execute(
+        text("SELECT id FROM email_templates WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+        {"id": template_id, "cid": current_user.customer_id}
+    ).fetchone()
+    if not tpl:
+        raise HTTPException(status_code=404, detail="Template not found")
+    rows = db.execute(
+        text("SELECT id, template_id, filename, content_type, file_size, created_at FROM email_template_attachments WHERE template_id=:tid ORDER BY id"),
+        {"tid": template_id}
+    ).fetchall()
+    return [dict(r._mapping) for r in rows]
+
+
+@router.post("/email-templates/{template_id}/attachments")
+async def upload_template_attachment(
+    template_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user),
+):
+    tpl = db.execute(
+        text("SELECT id FROM email_templates WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+        {"id": template_id, "cid": current_user.customer_id}
+    ).fetchone()
+    if not tpl:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail=f"File type '{content_type}' not allowed. Allowed: PDF, Images, Word, Excel, Text.")
+
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB.")
+
+    ext       = ALLOWED_TYPES[content_type]
+    safe_name = f"{uuid.uuid4().hex}.{ext}"
+    filepath  = os.path.join(UPLOAD_DIR, safe_name)
+    with open(filepath, "wb") as f:
+        f.write(contents)
+
+    result = db.execute(
+        text("""
+            INSERT INTO email_template_attachments (template_id, filename, filepath, content_type, file_size)
+            VALUES (:template_id, :filename, :filepath, :content_type, :file_size)
+        """),
+        {
+            "template_id":  template_id,
+            "filename":     file.filename,
+            "filepath":     filepath,
+            "content_type": content_type,
+            "file_size":    len(contents),
+        }
+    )
+    db.commit()
+    return {
+        "id":           result.lastrowid,
+        "template_id":  template_id,
+        "filename":     file.filename,
+        "content_type": content_type,
+        "file_size":    len(contents),
+    }
+
+
+@router.delete("/email-templates/{template_id}/attachments/{attachment_id}")
+def delete_template_attachment(
+    template_id: int,
+    attachment_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user),
+):
+    tpl = db.execute(
+        text("SELECT id FROM email_templates WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+        {"id": template_id, "cid": current_user.customer_id}
+    ).fetchone()
+    if not tpl:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    row = db.execute(
+        text("SELECT filepath FROM email_template_attachments WHERE id=:aid AND template_id=:tid"),
+        {"aid": attachment_id, "tid": template_id}
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    try:
+        if os.path.exists(row.filepath): os.remove(row.filepath)
+    except: pass
+
+    db.execute(text("DELETE FROM email_template_attachments WHERE id=:aid"), {"aid": attachment_id})
+    db.commit()
+    return {"message": "Attachment deleted"}
+
+
 @router.delete("/email-jobs/{job_id}/attachments/{attachment_id}")
 def delete_attachment(
     job_id: int,
