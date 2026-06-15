@@ -17,6 +17,7 @@ from app.database import get_db
 from app.dependencies.security import get_current_user
 from app.schemas import UserOut
 from app.utils.limits import _get_limits_row, DEFAULTS
+from app.utils.crypto import encrypt_field, decrypt_field
 from app.utils.ai_providers import (
     PROVIDER_REGISTRY,
     generate_email_variations,
@@ -150,7 +151,7 @@ def get_ai_config(
     cfg = _get_ai_config(db, current_user.customer_id)
     if not cfg:
         return None
-    key = cfg["api_key"]
+    key = decrypt_field(cfg["api_key"]) or ""
     masked = key[:6] + "●" * max(0, len(key) - 10) + key[-4:] if len(key) > 10 else "●" * len(key)
     info = get_provider_info(cfg["provider"])
     return AIConfigOut(
@@ -191,6 +192,8 @@ def save_ai_config(
         {"cid": current_user.customer_id},
     ).fetchone()
 
+    encrypted_key = encrypt_field(payload.api_key)
+
     if existing:
         db.execute(
             text("""
@@ -201,7 +204,7 @@ def save_ai_config(
             """),
             {
                 "provider": provider_key,
-                "api_key":  payload.api_key,
+                "api_key":  encrypted_key,
                 "base_url": info["base_url"],
                 "model":    payload.model,
                 "cid":      current_user.customer_id,
@@ -218,7 +221,7 @@ def save_ai_config(
             {
                 "cid":      current_user.customer_id,
                 "provider": provider_key,
-                "api_key":  payload.api_key,
+                "api_key":  encrypted_key,
                 "base_url": info["base_url"],
                 "model":    payload.model,
             },
@@ -286,7 +289,7 @@ def generate_email_template(
     try:
         variations, token_usage = generate_email_variations(
             provider=cfg["provider"],
-            api_key=cfg["api_key"],
+            api_key=decrypt_field(cfg["api_key"]),
             model=cfg["model"],
             context=payload.context,
             variables=payload.available_variables,

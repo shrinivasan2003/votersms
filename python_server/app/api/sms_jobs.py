@@ -190,8 +190,30 @@ def update_sms_job(
     if getattr(current_user, "role", "").lower() != "admin":
         raise HTTPException(status_code=403, detail="Admin rights required")
     try:
-        old_row = db.execute(text("SELECT * FROM sms_jobs WHERE id=:id"), {"id": id}).fetchone()
+        cid = getattr(current_user, 'customer_id', None)
+        # Customer-isolated fetch (fixes cross-tenant read in audit log)
+        old_row = db.execute(
+            text("SELECT * FROM sms_jobs WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"),
+            {"id": id, "cid": cid}
+        ).fetchone()
         old_vals = dict(old_row._mapping) if old_row else None
+
+        # Convert scheduled_at from customer's local timezone to UTC (same as create)
+        scheduled_at_str = req.get('scheduled_at') or None
+        if scheduled_at_str:
+            try:
+                cust_tz = get_customer_timezone(db, cid)
+                scheduled_at_str = naive_to_utc(scheduled_at_str.replace('Z', ''), cust_tz)
+                scheduled_at_str = scheduled_at_str[:19]
+                from datetime import datetime, timezone as _tz
+                sched_dt = datetime.fromisoformat(scheduled_at_str).replace(tzinfo=_tz.utc)
+                if sched_dt <= datetime.now(_tz.utc):
+                    raise HTTPException(status_code=400, detail="Scheduled time must be in the future.")
+            except HTTPException:
+                raise
+            except Exception:
+                raise HTTPException(status_code=400, detail="Invalid scheduled_at format.")
+
         db.execute(
             text("""
                 UPDATE sms_jobs SET
@@ -206,11 +228,11 @@ def update_sms_job(
             """),
             {
                 "id":           id,
-                "cid":          getattr(current_user, 'customer_id', None),
+                "cid":          cid,
                 "precinct_id":  req.get('precinct_id')  or None,
                 "template_id":  req.get('template_id'),
                 "provider_id":  req.get('provider_id')  or None,
-                "scheduled_at": req.get('scheduled_at') or None,
+                "scheduled_at": scheduled_at_str,
                 "status":       req.get('status', 'Pending'),
                 "list_id":      req.get('list_id')  or None,
                 "voter_id":     req.get('voter_id') or None,

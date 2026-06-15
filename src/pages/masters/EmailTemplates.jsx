@@ -158,6 +158,7 @@ const EmailTemplates = () => {
       const data = await emailTemplatesApi.list();
       setTemplates(Array.isArray(data) ? data : []);
     } catch (err) {
+      console.error('Failed to load templates:', err);
     } finally {
       setLoading(false);
     }
@@ -346,16 +347,18 @@ const EmailTemplates = () => {
         // stay in 'add' view (edit mode) — attachments section will now appear
       }
     } catch (err) {
+      alert(err.message || 'Failed to save template. Please try again.');
     }
   };
 
   const handleDelete = async (row) => {
     if (!window.confirm(`Are you sure you want to delete ${row.name}?`)) return;
-    
+
     try {
       await emailTemplatesApi.remove(row.id);
       fetchTemplates();
     } catch (err) {
+      alert(err.message || 'Failed to delete template. Please try again.');
     }
   };
 
@@ -535,7 +538,7 @@ const EmailTemplates = () => {
                     srcDoc={previewHtml || '<div style="padding:32px;color:#aaa;font-family:sans-serif;text-align:center;">Start typing HTML to see a preview...</div>'}
                     className="w-full bg-white"
                     style={{ height: '520px', border: 'none' }}
-                    sandbox="allow-same-origin"
+                    sandbox=""
                   />
                 </div>
               )}

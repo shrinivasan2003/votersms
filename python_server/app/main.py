@@ -82,11 +82,16 @@ def _ensure_admin_user() -> None:
                 {"u": admin_username, "p": new_hash},
             )
         else:
-            # Always sync the hash so the DB reflects the current .env password
-            db.execute(
-                text("UPDATE users SET password=:p WHERE id=:id"),
-                {"p": new_hash, "id": row.id},
-            )
+            # Only update password if .env password has changed (compare stored hash)
+            from app.utils.password import verify_password
+            existing = db.execute(
+                text("SELECT password FROM users WHERE id=:id"), {"id": row.id}
+            ).first()
+            if existing and not verify_password(admin_password, existing.password):
+                db.execute(
+                    text("UPDATE users SET password=:p WHERE id=:id"),
+                    {"p": new_hash, "id": row.id},
+                )
         db.commit()
     finally:
         db.close()

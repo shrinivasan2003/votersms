@@ -9,6 +9,8 @@ import httpx
 import logging
 import re
 import calendar
+import os
+import base64
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -413,7 +415,6 @@ def process_email_job(job_id: int):
         }
 
         # ── Load attachments (template-level + job-level, merged) ─────────
-        import base64 as _b64, os as _os2
         tpl_att_rows = db.execute(
             text("SELECT filename, filepath, content_type FROM email_template_attachments WHERE template_id=:tid"),
             {"tid": template.id}
@@ -422,14 +423,18 @@ def process_email_job(job_id: int):
             text("SELECT filename, filepath, content_type FROM email_job_attachments WHERE job_id=:jid"),
             {"jid": job_id}
         ).fetchall()
+        # Build attachment list: template attachments first, then job attachments.
+        # Job attachments win on filename collision (they override template defaults).
         postmark_attachments = []
         seen_names = set()
         for att in list(tpl_att_rows) + list(job_att_rows):
             try:
-                if _os2.path.exists(att.filepath):
+                if att.filename in seen_names:
+                    # Remove the earlier (template-level) entry so job-level wins
+                    postmark_attachments = [a for a in postmark_attachments if a["Name"] != att.filename]
+                if os.path.exists(att.filepath):
                     with open(att.filepath, "rb") as _f:
-                        encoded = _b64.b64encode(_f.read()).decode("utf-8")
-                    # Job attachments override template attachments with same name
+                        encoded = base64.b64encode(_f.read()).decode("utf-8")
                     seen_names.add(att.filename)
                     postmark_attachments.append({
                         "Name":        att.filename,
@@ -458,8 +463,7 @@ def process_email_job(job_id: int):
                 raw_subject = getattr(template, "subject", None) or template.name
                 subject = _substitute(raw_subject, voter, meta_by_voter.get(voter["id"], {}))
 
-                import os as _os
-                _inbound_base = _os.getenv("INBOUND_EMAIL_ADDRESS", "")
+                _inbound_base = os.getenv("INBOUND_EMAIL_ADDRESS", "")
                 payload = {
                     "From":          from_address,
                     "To":            voter["email"],
@@ -510,8 +514,15 @@ def process_email_job(job_id: int):
                     logger.error(f"Failed to send email to {voter['email']}: {e}")
                     failed_count += 1
 
-        job.status     = "Completed"
-        job.recipients = success_count + failed_count
+        total = success_count + failed_count
+        if success_count == 0:
+            job.status = "Failed"
+            logger.error(f"Email Job {job_id}: all {total} message(s) failed — marked Failed")
+        else:
+            job.status = "Completed"
+            if failed_count:
+                logger.warning(f"Email Job {job_id}: {success_count}/{total} sent, {failed_count} failed")
+        job.recipients = total
         db.commit()
 
         # Spawn next occurrence if this is a recurring job

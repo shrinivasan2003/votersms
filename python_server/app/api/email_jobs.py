@@ -298,6 +298,10 @@ def delete_email_job(
     try:
         old_row = db.execute(text("SELECT * FROM email_jobs WHERE id=:id AND (customer_id=:cid OR :cid IS NULL)"), {"id": id, "cid": current_user.customer_id}).fetchone()
         old_vals = dict(old_row._mapping) if old_row else None
+        if not old_row:
+            raise HTTPException(status_code=404, detail="Job not found")
+        if old_row.status == "Processing":
+            raise HTTPException(status_code=400, detail="Cannot delete a job that is currently processing. Wait for it to complete.")
         # Delete attachments from disk
         attachments = db.execute(text("SELECT filepath FROM email_job_attachments WHERE job_id=:id"), {"id": id}).fetchall()
         for a in attachments:

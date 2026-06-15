@@ -258,8 +258,12 @@ async def receive_postmark_webhook(
     Errors are logged but never surfaced as HTTP 500.
     """
     # ── Secret validation ─────────────────────────────────────────────────────
-    if WEBHOOK_SECRET and secret != WEBHOOK_SECRET:
-        # Still 401 so misconfigured URLs are obvious; doesn't affect valid events
+    # Always enforce the secret — if WEBHOOK_SECRET is not configured, reject all requests
+    # to prevent unauthenticated event injection
+    if not WEBHOOK_SECRET:
+        logger.error("WEBHOOK_SECRET is not configured — rejecting webhook request")
+        raise HTTPException(status_code=403, detail="Webhook secret not configured on server")
+    if secret != WEBHOOK_SECRET:
         raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
     # ── Parse JSON body ───────────────────────────────────────────────────────

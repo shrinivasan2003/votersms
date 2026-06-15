@@ -100,7 +100,7 @@ const EmailJobs = () => {
   // Tab filter for list view
   const [tab, setTab] = useState('all');
 
-  const fetchData = async () => {
+  const fetchData = async (signal) => {
     setLoading(true);
     try {
       const [jobsData, listsData, templatesData, providersData, settingsData] = await Promise.all([
@@ -110,6 +110,7 @@ const EmailJobs = () => {
         emailProvidersApi.list(),
         customersApi.getMySettings(),
       ]);
+      if (signal?.aborted) return;
       if (settingsData?.timezone) {
         setCustomerTz(settingsData.timezone);
         setTzShort(settingsData.timezone_short?.[settingsData.timezone] || settingsData.timezone);
@@ -119,11 +120,13 @@ const EmailJobs = () => {
       setTemplates(Array.isArray(templatesData) ? templatesData : []);
       setProviders(Array.isArray(providersData) ? providersData : []);
     } catch (err) {
+      if (!signal?.aborted) console.error('Failed to load email jobs data:', err);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
-    // Load analytics separately — it's a heavy query and shouldn't block the initial render
+    // Load analytics separately — heavy query, shouldn't block initial render
     emailAnalyticsApi.list().then(analyticsData => {
+      if (signal?.aborted) return;
       if (Array.isArray(analyticsData)) {
         const map = {};
         analyticsData.forEach(a => { map[a.job_id] = a; });
@@ -140,7 +143,11 @@ const EmailJobs = () => {
   }, []);
 
   useJobPolling(refreshJobs);
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchData(controller.signal);
+    return () => controller.abort();
+  }, []);
 
   // ── Table columns ─────────────────────────────────────────────────────────
   const columns = [
@@ -191,7 +198,12 @@ const EmailJobs = () => {
         </div>
       ),
     },
-    { header: 'CREATED',    accessor: 'created_at' },
+    { header: 'CREATED', render: (row) => {
+        const d = parseUTC(row.created_at);
+        if (!d) return <span className="text-gray-400">—</span>;
+        return <span className="text-xs text-brand-textSecondary">{d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>;
+      }
+    },
     {
       header: 'ANALYTICS',
       render: (row) => {
@@ -352,13 +364,18 @@ const EmailJobs = () => {
 
   // ── Tab filtering ─────────────────────────────────────────────────────────
   const completedJobs = jobs.filter(j => j.status === 'Completed');
-  const pendingJobs   = jobs.filter(j => j.status !== 'Completed');
-  const visibleJobs   = tab === 'completed' ? completedJobs : tab === 'pending' ? pendingJobs : jobs;
+  const failedJobs    = jobs.filter(j => j.status === 'Failed');
+  const pendingJobs   = jobs.filter(j => j.status !== 'Completed' && j.status !== 'Failed');
+  const visibleJobs   = tab === 'completed' ? completedJobs
+                      : tab === 'pending'   ? pendingJobs
+                      : tab === 'failed'    ? failedJobs
+                      : jobs;
 
   const tabs = [
     { key: 'all',       label: 'All Jobs',       count: jobs.length },
-    { key: 'pending',   label: 'Pending Jobs',   count: pendingJobs.length },
-    { key: 'completed', label: 'Completed Jobs',  count: completedJobs.length },
+    { key: 'pending',   label: 'Pending / Active', count: pendingJobs.length },
+    { key: 'failed',    label: 'Failed',          count: failedJobs.length },
+    { key: 'completed', label: 'Completed',        count: completedJobs.length },
   ];
 
   // ── List view ─────────────────────────────────────────────────────────────

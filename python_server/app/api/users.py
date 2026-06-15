@@ -48,6 +48,8 @@ def create_user(
 ):
     # If the caller is admin, allow role from payload; otherwise force "User"
     role = user_in.role if current_user.role == "admin" else "User"
+    # Inherit customer_id from the creating user (tenant isolation)
+    customer_id = current_user.customer_id
     hashed_pwd = hash_password(user_in.password)
     new_user = UserModel(
         username=user_in.username,
@@ -55,6 +57,7 @@ def create_user(
         name=user_in.full_name,
         role=role,
         status=user_in.status,
+        customer_id=customer_id,
     )
     db.add(new_user)
     db.commit()
@@ -67,7 +70,7 @@ def update_user(
     user_id: int,
     user_in: UserUpdate,
     db: Session = Depends(get_db),
-    _: UserOut = Depends(require_self_or_admin),
+    current_user: UserOut = Depends(require_self_or_admin),
 ):
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if not user:
@@ -78,7 +81,8 @@ def update_user(
         user.username = user_in.username
     if user_in.full_name:
         user.name = user_in.full_name
-    if user_in.role:
+    # Only admins can change roles — prevent self-escalation
+    if user_in.role and current_user.role == "admin":
         user.role = user_in.role
     if user_in.status:
         user.status = user_in.status
@@ -91,11 +95,16 @@ def update_user(
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    _: UserOut = Depends(require_self_or_admin),
+    current_user: UserOut = Depends(require_self_or_admin),
 ):
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    # Prevent deleting the last admin account
+    if user.role == "admin":
+        admin_count = db.query(UserModel).filter(UserModel.role == "admin").count()
+        if admin_count <= 1:
+            raise HTTPException(status_code=400, detail="Cannot delete the last admin account.")
     db.delete(user)
     db.commit()
     return {"detail": "User deleted"}
