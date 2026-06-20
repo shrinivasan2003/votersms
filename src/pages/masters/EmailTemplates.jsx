@@ -151,6 +151,9 @@ const EmailTemplates = () => {
   const { setEmailContext }             = useNadia();
   const [showPreview, setShowPreview]   = useState(false);
   const [previewHtml, setPreviewHtml]   = useState('');
+  const [showLinkPopup, setShowLinkPopup] = useState(false);
+  const [linkText, setLinkText]           = useState('');
+  const [linkUrl, setLinkUrl]             = useState('');
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -233,6 +236,27 @@ const EmailTemplates = () => {
   // Update preview in real time as user types
   const handleBodyChange = (e) => {
     if (format === 'HTML') setPreviewHtml(e.target.value);
+  };
+
+  const handleInsertLink = () => {
+    const text = linkText.trim();
+    const url  = linkUrl.trim();
+    if (!url) return;
+    const insertion = text ? `${text} (${url})` : url;
+    const ta = bodyRef.current;
+    if (ta) {
+      const start = ta.selectionStart;
+      const end   = ta.selectionEnd;
+      const before = ta.value.substring(0, start);
+      const after  = ta.value.substring(end);
+      ta.value = before + insertion + after;
+      const pos = start + insertion.length;
+      ta.setSelectionRange(pos, pos);
+      ta.focus();
+    }
+    setShowLinkPopup(false);
+    setLinkText('');
+    setLinkUrl('');
   };
 
   // Called by NadiaAI when user clicks "Use This Template"
@@ -459,17 +483,71 @@ const EmailTemplates = () => {
               <div className="flex justify-between items-center">
                 <label className="block text-sm font-bold text-brand-textPrimary">Message Body *</label>
                 <div className="flex items-center gap-2">
+                  {format === 'Plain Text' && (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => { setShowLinkPopup(p => !p); setLinkText(''); setLinkUrl(''); }}
+                        className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50 transition-all"
+                      >
+                        🔗 Insert Link
+                      </button>
+                      {showLinkPopup && (
+                        <div className="absolute z-50 top-8 left-0 bg-white border border-gray-200 rounded-xl shadow-lg p-4 w-72 space-y-3">
+                          <p className="text-xs font-bold text-brand-textPrimary">Insert Link</p>
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-brand-textMuted font-semibold">Display Text <span className="font-normal">(optional)</span></label>
+                            <input
+                              type="text"
+                              value={linkText}
+                              onChange={e => setLinkText(e.target.value)}
+                              placeholder="e.g. Click here"
+                              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-brand-blue"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-brand-textMuted font-semibold">URL *</label>
+                            <input
+                              type="url"
+                              value={linkUrl}
+                              onChange={e => setLinkUrl(e.target.value)}
+                              placeholder="https://example.com"
+                              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-brand-blue"
+                            />
+                          </div>
+                          <p className="text-[10px] text-gray-400">Inserts as: <em>Display Text (https://...)</em></p>
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={handleInsertLink}
+                              className="flex-1 py-1.5 text-xs font-bold bg-brand-blue text-white rounded-lg hover:bg-opacity-90 transition-all"
+                              style={{ backgroundColor: '#0047AB' }}
+                            >
+                              Insert
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowLinkPopup(false)}
+                              className="flex-1 py-1.5 text-xs font-bold bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="flex rounded-md overflow-hidden border border-gray-200">
                     <button
                       type="button"
-                      onClick={() => { setFormat('Plain Text'); setNadiaFormat('Plain Text'); setShowPreview(false); }}
+                      onClick={() => { setFormat('Plain Text'); setNadiaFormat('Plain Text'); setShowPreview(false); setShowLinkPopup(false); }}
                       className={`px-3 py-1 text-[11px] font-bold transition-all ${format === 'Plain Text' ? 'bg-brand-blue text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
                     >
                       Plain Text
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setFormat('HTML'); setNadiaFormat('HTML'); setPreviewHtml(bodyRef.current?.value || ''); }}
+                      onClick={() => { setFormat('HTML'); setNadiaFormat('HTML'); setPreviewHtml(bodyRef.current?.value || ''); setShowLinkPopup(false); }}
                       className={`px-3 py-1 text-[11px] font-bold transition-all ${format === 'HTML' ? 'bg-brand-blue text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
                     >
                       HTML
