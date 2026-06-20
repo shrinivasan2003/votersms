@@ -1,7 +1,5 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { Paperclip, Trash2, Upload } from 'lucide-react';
-import ReactQuill, { Quill } from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import { useState, useEffect, useRef } from 'react';
+import { Paperclip, Trash2, Upload, Bold, Italic, Strikethrough, Heading1, Heading2, Heading3, List, ListOrdered, Link, Link2Off, Eraser } from 'lucide-react';
 
 import { emailTemplatesApi, emailTemplateAttachmentsApi } from '../../api/email';
 import DataTable from '../../components/shared/DataTable';
@@ -145,20 +143,21 @@ const EmailTemplates = () => {
   const [editingRow, setEditingRow] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(false);
-  const subjectRef  = useRef(null);
-  const quillRef    = useRef(null);
-  const [format, setFormat]           = useState('Plain Text');
-  const [metaTags, setMetaTags]       = useState([]);
-  const [nadiaFormat, setNadiaFormat] = useState('Plain Text');
-  const { setEmailContext }           = useNadia();
-  const [htmlBody, setHtmlBody]       = useState('');
-  const [plainBody, setPlainBody]     = useState('');
-  const [showPreview, setShowPreview] = useState(false);
-  // Insert Link popup for Plain Text mode
-  const [showLinkPopup, setShowLinkPopup] = useState(false);
-  const [linkText, setLinkText]           = useState('');
-  const [linkUrl, setLinkUrl]             = useState('');
-  const plainBodyRef = useRef(null);
+  const bodyRef    = useRef(null);
+  const subjectRef = useRef(null);
+  const [format, setFormat]             = useState('Plain Text');
+  const [metaTags, setMetaTags]         = useState([]);
+  const [nadiaFormat, setNadiaFormat]   = useState('Plain Text');
+  const { setEmailContext }             = useNadia();
+  const [showPreview, setShowPreview]   = useState(false);
+  const [previewHtml, setPreviewHtml]   = useState('');
+  const [showLinkPopup, setShowLinkPopup]         = useState(false);
+  const [showHtmlLinkPopup, setShowHtmlLinkPopup] = useState(false);
+  const [linkText, setLinkText]                   = useState('');
+  const [linkUrl, setLinkUrl]                     = useState('');
+  const [htmlLinkUrl, setHtmlLinkUrl]             = useState('');
+  const savedSelStart = useRef(0);
+  const savedSelEnd   = useRef(0);
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -218,79 +217,135 @@ const EmailTemplates = () => {
     }
   ];
 
-  const quillModules = useMemo(() => ({
-    toolbar: [
-      [{ font: [] }, { size: ['small', false, 'large', 'huge'] }],
-      ['bold', 'italic', 'underline', 'strike'],
-      [{ color: [] }, { background: [] }],
-      [{ header: [1, 2, 3, 4, 5, 6, false] }],
-      [{ align: [] }],
-      [{ list: 'ordered' }, { list: 'bullet' }],
-      [{ indent: '-1' }, { indent: '+1' }],
-      ['link', 'image'],
-      ['clean'],
-    ],
-  }), []);
-
-  const quillFormats = [
-    'font', 'size',
-    'bold', 'italic', 'underline', 'strike',
-    'color', 'background',
-    'header',
-    'align',
-    'list', 'bullet', 'indent',
-    'link', 'image',
-  ];
-
   const handleAdd = () => {
     setEditingRow(null);
-    setHtmlBody('');
+    setFormat('Plain Text');
     setView('add');
   };
 
   const handleEdit = (row) => {
     setEditingRow(row);
-    setHtmlBody(row.body || '');
+    setFormat(row.type === 'HTML' ? 'HTML' : 'Plain Text');
     setView('add');
   };
 
   const handleBack = () => {
     setView('list');
     setEditingRow(null);
-    setHtmlBody('');
+    setFormat('Plain Text');
     setShowPreview(false);
+    setPreviewHtml('');
+  };
+
+  // Update preview in real time as user types
+  const handleBodyChange = (e) => {
+    if (format === 'HTML') setPreviewHtml(e.target.value);
   };
 
   const handleInsertLink = () => {
     const text = linkText.trim();
     const url  = linkUrl.trim();
     if (!url) return;
+    // Always insert a proper HTML anchor so the link is clickable in email clients
     const insertion = text
       ? `<a href="${url}">${text}</a>`
       : `<a href="${url}">${url}</a>`;
-    const ta = plainBodyRef.current;
+    const ta = bodyRef.current;
     if (ta) {
-      const start  = ta.selectionStart;
-      const end    = ta.selectionEnd;
+      const start = ta.selectionStart;
+      const end   = ta.selectionEnd;
       const before = ta.value.substring(0, start);
       const after  = ta.value.substring(end);
       ta.value = before + insertion + after;
-      ta.setSelectionRange(start + insertion.length, start + insertion.length);
+      const pos = start + insertion.length;
+      ta.setSelectionRange(pos, pos);
       ta.focus();
-      setPlainBody(ta.value);
+      // Switch to HTML so the anchor tag renders correctly in email clients
       setFormat('HTML');
       setNadiaFormat('HTML');
-      setHtmlBody(ta.value);
+      setPreviewHtml(ta.value);
     }
     setShowLinkPopup(false);
     setLinkText('');
     setLinkUrl('');
   };
 
+  const wrapSelection = (openTag, closeTag) => {
+    const ta = bodyRef.current;
+    if (!ta) return;
+    const start  = ta.selectionStart;
+    const end    = ta.selectionEnd;
+    const before = ta.value.substring(0, start);
+    const sel    = ta.value.substring(start, end);
+    const after  = ta.value.substring(end);
+    ta.value = before + openTag + sel + closeTag + after;
+    ta.setSelectionRange(start + openTag.length, start + openTag.length + sel.length);
+    ta.focus();
+    setPreviewHtml(ta.value);
+  };
+
+  const handleHtmlInsertLink = () => {
+    const url = htmlLinkUrl.trim();
+    if (!url) return;
+    const ta = bodyRef.current;
+    if (!ta) return;
+    const start  = savedSelStart.current;
+    const end    = savedSelEnd.current;
+    const sel    = ta.value.substring(start, end) || url;
+    const before = ta.value.substring(0, start);
+    const after  = ta.value.substring(end);
+    const tag    = `<a href="${url}">${sel}</a>`;
+    ta.value = before + tag + after;
+    ta.setSelectionRange(start, start + tag.length);
+    ta.focus();
+    setPreviewHtml(ta.value);
+    setShowHtmlLinkPopup(false);
+    setHtmlLinkUrl('');
+  };
+
+  const handleUnlink = () => {
+    const ta = bodyRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end   = ta.selectionEnd;
+    const sel   = ta.value.substring(start, end);
+    const stripped = sel.replace(/<a\b[^>]*>(.*?)<\/a>/gi, '$1');
+    const before = ta.value.substring(0, start);
+    const after  = ta.value.substring(end);
+    ta.value = before + stripped + after;
+    ta.setSelectionRange(start, start + stripped.length);
+    ta.focus();
+    setPreviewHtml(ta.value);
+  };
+
+  const handleClearFormatting = () => {
+    const ta = bodyRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end   = ta.selectionEnd;
+    if (start === end) return;
+    const before = ta.value.substring(0, start);
+    const after  = ta.value.substring(end);
+    ta.value = before + after;
+    ta.setSelectionRange(start, start);
+    ta.focus();
+    setPreviewHtml(ta.value);
+  };
+
   // Called by NadiaAI when user clicks "Use This Template"
-  const handleNadiaUse = ({ subject, body }) => {
+  const handleNadiaUse = ({ subject, body, format: generatedFormat }) => {
     if (subjectRef.current) subjectRef.current.value = subject;
-    setHtmlBody(body || '');
+    if (bodyRef.current)    bodyRef.current.value    = body;
+    const fmt = generatedFormat || nadiaFormat;
+    setFormat(fmt);
+    setNadiaFormat(fmt);
+    if (fmt === 'HTML') {
+      setPreviewHtml(body);
+      setShowPreview(true);
+    } else {
+      setShowPreview(false);
+      setPreviewHtml('');
+    }
   };
 
   // Register email context with global Nadia when form is open; clear on close
@@ -308,7 +363,7 @@ const EmailTemplates = () => {
     }
     return () => setEmailContext(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, metaTags]);
+  }, [view, metaTags, nadiaFormat]);
 
   // Attachment state (only used when editing an existing template)
   const [attachments, setAttachments]     = useState([]);
@@ -376,9 +431,9 @@ const EmailTemplates = () => {
       code:     formData.get('code'),
       name:     formData.get('name'),
       subject:  formData.get('subject'),
-      body:     htmlBody,
+      body:     formData.get('body'),
       status:   formData.get('active') === 'on' ? 'Active' : 'Inactive',
-      type:     'HTML',
+      type:     format,
       cc:       formData.get('cc')       || null,
       bcc:      formData.get('bcc')      || null,
       reply_to: formData.get('reply_to') || null,
@@ -394,7 +449,8 @@ const EmailTemplates = () => {
         const created = await emailTemplatesApi.create(data);
         await fetchTemplates();
         setEditingRow(created);
-        setHtmlBody(created.body || '');
+        setFormat(created.type === 'HTML' ? 'HTML' : 'Plain Text');
+        // stay in 'add' view (edit mode) — attachments section will now appear
       }
     } catch (err) {
       alert(err.message || 'Failed to save template. Please try again.');
@@ -506,54 +562,188 @@ const EmailTemplates = () => {
             <p className="text-xs text-brand-textMuted -mt-2">CC and BCC are applied to every email sent in a bulk job. Separate multiple addresses with commas.</p>
 
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              <div className="flex justify-between items-center">
                 <label className="block text-sm font-bold text-brand-textPrimary">Message Body *</label>
-                <button
-                  type="button"
-                  onClick={() => setShowPreview(p => !p)}
-                  className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-md border transition-all ${showPreview ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-emerald-700 border-emerald-400 hover:bg-emerald-50'}`}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                  {showPreview ? 'Hide Preview' : 'Preview'}
-                </button>
-              </div>
-              <div className="border border-brand-border rounded-lg overflow-hidden">
-                <ReactQuill
-                  ref={quillRef}
-                  theme="snow"
-                  value={htmlBody}
-                  onChange={setHtmlBody}
-                  modules={quillModules}
-                  formats={quillFormats}
-                  style={{ minHeight: '420px' }}
-                  placeholder="Compose your email here — use the toolbar to format, or just type plain text..."
-                />
+                <div className="flex items-center gap-2">
+                  {format === 'Plain Text' && (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => { setShowLinkPopup(p => !p); setLinkText(''); setLinkUrl(''); }}
+                        className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-md border border-blue-300 text-blue-600 hover:bg-blue-50 transition-all"
+                      >
+                        🔗 Insert Link
+                      </button>
+                      {showLinkPopup && (
+                        <div className="absolute z-50 top-8 left-0 bg-white border border-gray-200 rounded-xl shadow-lg p-4 w-72 space-y-3">
+                          <p className="text-xs font-bold text-brand-textPrimary">Insert Link</p>
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-brand-textMuted font-semibold">Display Text <span className="font-normal">(optional)</span></label>
+                            <input
+                              type="text"
+                              value={linkText}
+                              onChange={e => setLinkText(e.target.value)}
+                              placeholder="e.g. Click here"
+                              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-brand-blue"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-brand-textMuted font-semibold">URL *</label>
+                            <input
+                              type="url"
+                              value={linkUrl}
+                              onChange={e => setLinkUrl(e.target.value)}
+                              placeholder="https://example.com"
+                              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-brand-blue"
+                            />
+                          </div>
+                          <p className="text-[10px] text-gray-400">Inserts a clickable blue link — switches to HTML mode automatically.</p>
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={handleInsertLink}
+                              className="flex-1 py-1.5 text-xs font-bold bg-brand-blue text-white rounded-lg hover:bg-opacity-90 transition-all"
+                              style={{ backgroundColor: '#0047AB' }}
+                            >
+                              Insert
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShowLinkPopup(false)}
+                              className="flex-1 py-1.5 text-xs font-bold bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-all"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex rounded-md overflow-hidden border border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => { setFormat('Plain Text'); setNadiaFormat('Plain Text'); setShowPreview(false); setShowLinkPopup(false); }}
+                      className={`px-3 py-1 text-[11px] font-bold transition-all ${format === 'Plain Text' ? 'bg-brand-blue text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                    >
+                      Plain Text
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setFormat('HTML'); setNadiaFormat('HTML'); setPreviewHtml(bodyRef.current?.value || ''); setShowLinkPopup(false); }}
+                      className={`px-3 py-1 text-[11px] font-bold transition-all ${format === 'HTML' ? 'bg-brand-blue text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                    >
+                      HTML
+                    </button>
+                  </div>
+                  {format === 'HTML' && (
+                    <button
+                      type="button"
+                      onClick={() => { setShowPreview(p => !p); setPreviewHtml(bodyRef.current?.value || ''); }}
+                      className={`flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold rounded-md border transition-all ${showPreview ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-emerald-700 border-emerald-400 hover:bg-emerald-50'}`}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      {showPreview ? 'Hide Preview' : 'Preview'}
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {showPreview && (
-                <div className="mt-2 border border-emerald-300 rounded-xl overflow-hidden shadow-sm">
+              {format === 'HTML' && (
+                <div className="flex items-center flex-wrap gap-y-1 space-x-1 p-2 bg-white border border-brand-border rounded-t-lg border-b-0">
+                  {/* Bold */}
+                  <button type="button" title="Bold — select text then click" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<strong>', '</strong>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Bold size={15} /></button>
+                  {/* Italic */}
+                  <button type="button" title="Italic — select text then click" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<em>', '</em>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Italic size={15} /></button>
+                  {/* Strikethrough */}
+                  <button type="button" title="Strikethrough — select text then click" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<s>', '</s>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Strikethrough size={15} /></button>
+                  <div className="w-px h-6 bg-gray-200 mx-1" />
+                  {/* Headings */}
+                  <button type="button" title="Heading 1 — largest title" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<h1>', '</h1>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Heading1 size={15} /></button>
+                  <button type="button" title="Heading 2 — section title" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<h2>', '</h2>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Heading2 size={15} /></button>
+                  <button type="button" title="Heading 3 — sub-section title" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<h3>', '</h3>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Heading3 size={15} /></button>
+                  <div className="w-px h-6 bg-gray-200 mx-1" />
+                  {/* Bullet list */}
+                  <button type="button" title="Bullet list — unordered dot list" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<ul>\n  <li>', '</li>\n</ul>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><List size={15} /></button>
+                  {/* Numbered list */}
+                  <button type="button" title="Numbered list — ordered 1, 2, 3... list" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<ol>\n  <li>', '</li>\n</ol>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><ListOrdered size={15} /></button>
+                  <div className="w-px h-6 bg-gray-200 mx-1" />
+                  {/* Insert Link */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      title="Insert hyperlink — select text first, then click to add a URL"
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => {
+                        const ta = bodyRef.current;
+                        if (ta) { savedSelStart.current = ta.selectionStart; savedSelEnd.current = ta.selectionEnd; }
+                        setShowHtmlLinkPopup(p => !p);
+                        setHtmlLinkUrl('');
+                      }}
+                      className="p-1.5 hover:bg-gray-100 rounded text-gray-600"
+                    ><Link size={15} /></button>
+                    {showHtmlLinkPopup && (
+                      <div className="absolute z-50 top-9 left-0 bg-white border border-gray-200 rounded-xl shadow-lg p-4 w-64 space-y-3">
+                        <p className="text-xs font-bold text-brand-textPrimary">Insert Hyperlink</p>
+                        <p className="text-[10px] text-gray-400">Select text in the body first, then enter a URL. Selected text becomes the clickable label.</p>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-brand-textMuted font-semibold">URL *</label>
+                          <input
+                            type="url"
+                            value={htmlLinkUrl}
+                            onChange={e => setHtmlLinkUrl(e.target.value)}
+                            placeholder="https://example.com"
+                            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-brand-blue"
+                          />
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <button type="button" onClick={handleHtmlInsertLink} className="flex-1 py-1.5 text-xs font-bold text-white rounded-lg" style={{ backgroundColor: '#0047AB' }}>Insert</button>
+                          <button type="button" onClick={() => setShowHtmlLinkPopup(false)} className="flex-1 py-1.5 text-xs font-bold bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">Cancel</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* Remove Link */}
+                  <button type="button" title="Remove link — select linked text then click to strip the hyperlink" onMouseDown={e => e.preventDefault()} onClick={handleUnlink} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Link2Off size={15} /></button>
+                  <div className="w-px h-6 bg-gray-200 mx-1" />
+                  {/* Delete selected text */}
+                  <button type="button" title="Delete — removes the selected text from the body" onMouseDown={e => e.preventDefault()} onClick={handleClearFormatting} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Eraser size={15} /></button>
+                </div>
+              )}
+
+              <textarea
+                ref={bodyRef}
+                name="body"
+                onChange={handleBodyChange}
+                className={`block w-full border border-brand-border px-4 py-4 outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue min-h-[200px] transition-all font-mono text-sm ${format === 'HTML' ? 'rounded-b-lg' : 'rounded-lg'}`}
+                required
+                placeholder="e.g. Dear {{FirstName}}, thank you for registering..."
+                defaultValue={editingRow?.body || ''}
+              ></textarea>
+
+              {/* ── Live HTML Preview Panel ── */}
+              {format === 'HTML' && showPreview && (
+                <div className="mt-3 border border-emerald-300 rounded-xl overflow-hidden shadow-sm">
                   <div className="flex items-center justify-between bg-emerald-50 border-b border-emerald-200 px-4 py-2">
                     <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-red-400 inline-block" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-green-400 inline-block" />
-                      <span className="text-xs font-semibold text-emerald-700 ml-2">Email Preview</span>
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-400 inline-block"></span>
+                      <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block"></span>
+                      <span className="w-2.5 h-2.5 rounded-full bg-green-400 inline-block"></span>
+                      <span className="text-xs font-semibold text-emerald-700 ml-2">Live Preview</span>
                     </div>
-                    <span className="text-[10px] text-emerald-500 font-medium">How it looks in an email client</span>
+                    <span className="text-[10px] text-emerald-500 font-medium">Updates as you type</span>
                   </div>
                   <iframe
-                    title="Email Preview"
-                    srcDoc={htmlBody || '<div style="padding:32px;color:#aaa;font-family:Arial,sans-serif;text-align:center;">Start writing to see a preview...</div>'}
+                    title="HTML Preview"
+                    srcDoc={previewHtml || '<div style="padding:32px;color:#aaa;font-family:sans-serif;text-align:center;">Start typing HTML to see a preview...</div>'}
                     className="w-full bg-white"
                     style={{ height: '520px', border: 'none' }}
                     sandbox=""
                   />
                 </div>
               )}
-
               <div className="text-xs text-brand-textMuted pt-1 space-y-0.5">
                 <p className="font-semibold text-brand-textSecondary">Available variables:</p>
                 <p>
@@ -563,7 +753,7 @@ const EmailTemplates = () => {
                 </p>
                 <p className="text-gray-400">Example: <em>Dear {'{{FirstName}}'}, your ballot has been received.</em></p>
               </div>
-              <ListTagPicker textareaRef={plainBodyRef} secondaryRef={subjectRef} onTagsChange={setMetaTags} />
+              <ListTagPicker textareaRef={bodyRef} secondaryRef={subjectRef} onTagsChange={setMetaTags} />
             </div>
 
             <div className="flex items-center space-x-3">
