@@ -242,7 +242,10 @@ const EmailTemplates = () => {
     const text = linkText.trim();
     const url  = linkUrl.trim();
     if (!url) return;
-    const insertion = text ? `${text} (${url})` : url;
+    // Always insert a proper HTML anchor so the link is clickable in email clients
+    const insertion = text
+      ? `<a href="${url}">${text}</a>`
+      : `<a href="${url}">${url}</a>`;
     const ta = bodyRef.current;
     if (ta) {
       const start = ta.selectionStart;
@@ -253,6 +256,10 @@ const EmailTemplates = () => {
       const pos = start + insertion.length;
       ta.setSelectionRange(pos, pos);
       ta.focus();
+      // Switch to HTML so the anchor tag renders correctly in email clients
+      setFormat('HTML');
+      setNadiaFormat('HTML');
+      setPreviewHtml(ta.value);
     }
     setShowLinkPopup(false);
     setLinkText('');
@@ -515,7 +522,7 @@ const EmailTemplates = () => {
                               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-brand-blue"
                             />
                           </div>
-                          <p className="text-[10px] text-gray-400">Inserts as: <em>Display Text (https://...)</em></p>
+                          <p className="text-[10px] text-gray-400">Inserts a clickable blue link — switches to HTML mode automatically.</p>
                           <div className="flex gap-2 pt-1">
                             <button
                               type="button"
