@@ -333,10 +333,19 @@ const EmailTemplates = () => {
   };
 
   // Called by NadiaAI when user clicks "Use This Template"
-  const handleNadiaUse = ({ subject, body }) => {
+  const handleNadiaUse = ({ subject, body, format: generatedFormat }) => {
     if (subjectRef.current) subjectRef.current.value = subject;
     if (bodyRef.current)    bodyRef.current.value    = body;
-    setFormat(nadiaFormat);
+    const fmt = generatedFormat || nadiaFormat;
+    setFormat(fmt);
+    setNadiaFormat(fmt);
+    if (fmt === 'HTML') {
+      setPreviewHtml(body);
+      setShowPreview(true);
+    } else {
+      setShowPreview(false);
+      setPreviewHtml('');
+    }
   };
 
   // Register email context with global Nadia when form is open; clear on close

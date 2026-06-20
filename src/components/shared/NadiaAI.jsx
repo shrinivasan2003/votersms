@@ -500,7 +500,7 @@ function GeneratorView({ navigate, setOpen }) {
   };
 
   const handleUse = (variation) => {
-    emailContext?.onUseTemplate?.(variation);
+    emailContext?.onUseTemplate?.({ ...variation, format });
     setOpen(false);
     setVariations([]);
     setContext('');
