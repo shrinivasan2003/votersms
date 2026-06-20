@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { ListChecks, Plus, Users, Upload, Download, ArrowLeft, Trash2, Search, X, Star, Edit2, RefreshCw, UserPlus, Check, Tag, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Badge from '../../components/shared/Badge';
@@ -193,23 +194,36 @@ const Lists = () => {
     }
   };
 
-  // CSV upload
+  // CSV / XLSX upload
   const handleCsvUpload = async () => {
     if (!csvFile) return;
     setIsUploading(true);
+    const isXlsx = /\.(xlsx|xls)$/i.test(csvFile.name);
     const reader = new FileReader();
     reader.onload = async (e) => {
-      const text = e.target.result;
-      const lines = text.split('\n').filter(l => l.trim());
-      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-      const rows = lines.slice(1).map(line => {
-        const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-        const obj = {};
-        headers.forEach((h, i) => { obj[h] = vals[i] || ''; });
-        return obj;
-      }).filter(r => r.email || r.voter_id);
-
+      let rows = [];
       try {
+        if (isXlsx) {
+          const workbook = XLSX.read(e.target.result, { type: 'array' });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const data = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+          rows = data.map(r => {
+            const obj = {};
+            Object.keys(r).forEach(k => { obj[k.trim().toLowerCase()] = String(r[k] ?? ''); });
+            return obj;
+          });
+        } else {
+          const text = e.target.result;
+          const lines = text.split('\n').filter(l => l.trim());
+          const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+          rows = lines.slice(1).map(line => {
+            const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+            const obj = {};
+            headers.forEach((h, i) => { obj[h] = vals[i] || ''; });
+            return obj;
+          });
+        }
+        rows = rows.filter(r => r.email || r.voter_id);
         const result = await listsApi.bulkImport(selectedList.id, rows);
         const parts = [];
         if (result.added > 0) parts.push(`${result.added} new member(s) added`);
@@ -226,7 +240,8 @@ const Lists = () => {
         setIsUploading(false);
       }
     };
-    reader.readAsText(csvFile);
+    if (isXlsx) reader.readAsArrayBuffer(csvFile);
+    else reader.readAsText(csvFile);
   };
 
   const handleDownloadTemplate = async () => {
@@ -696,9 +711,9 @@ const Lists = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-brand-textPrimary">Select CSV File</label>
+                  <label className="block text-sm font-medium text-brand-textPrimary">Select File <span className="text-xs font-normal text-brand-textMuted">(CSV or Excel)</span></label>
                   <div className="flex items-center gap-3">
-                    <input type="file" ref={fileInputRef} onChange={e => setCsvFile(e.target.files[0])} accept=".csv" className="hidden" />
+                    <input type="file" ref={fileInputRef} onChange={e => setCsvFile(e.target.files[0])} accept=".csv,.xlsx,.xls" className="hidden" />
                     <button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-blue-50 text-brand-blue rounded-lg text-sm font-semibold hover:bg-blue-100 transition-colors">
                       Choose file
                     </button>
