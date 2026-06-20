@@ -321,12 +321,11 @@ const EmailTemplates = () => {
     if (!ta) return;
     const start = ta.selectionStart;
     const end   = ta.selectionEnd;
-    const sel   = ta.value.substring(start, end);
-    const stripped = sel.replace(/<[^>]+>/g, '');
+    if (start === end) return;
     const before = ta.value.substring(0, start);
     const after  = ta.value.substring(end);
-    ta.value = before + stripped + after;
-    ta.setSelectionRange(start, start + stripped.length);
+    ta.value = before + after;
+    ta.setSelectionRange(start, start);
     ta.focus();
     setPreviewHtml(ta.value);
   };
@@ -644,27 +643,28 @@ const EmailTemplates = () => {
               {format === 'HTML' && (
                 <div className="flex items-center space-x-1 p-2 bg-white border border-brand-border rounded-t-lg border-b-0 overflow-x-auto">
                   {/* Bold */}
-                  <button type="button" title="Bold — select text then click" onClick={() => wrapSelection('<strong>', '</strong>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Bold size={15} /></button>
+                  <button type="button" title="Bold — select text then click" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<strong>', '</strong>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Bold size={15} /></button>
                   {/* Italic */}
-                  <button type="button" title="Italic — select text then click" onClick={() => wrapSelection('<em>', '</em>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Italic size={15} /></button>
+                  <button type="button" title="Italic — select text then click" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<em>', '</em>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Italic size={15} /></button>
                   {/* Strikethrough */}
-                  <button type="button" title="Strikethrough — select text then click" onClick={() => wrapSelection('<s>', '</s>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Strikethrough size={15} /></button>
+                  <button type="button" title="Strikethrough — select text then click" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<s>', '</s>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Strikethrough size={15} /></button>
                   <div className="w-px h-6 bg-gray-200 mx-1" />
                   {/* Headings */}
-                  <button type="button" title="Heading 1 — largest title" onClick={() => wrapSelection('<h1>', '</h1>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Heading1 size={15} /></button>
-                  <button type="button" title="Heading 2 — section title" onClick={() => wrapSelection('<h2>', '</h2>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Heading2 size={15} /></button>
-                  <button type="button" title="Heading 3 — sub-section title" onClick={() => wrapSelection('<h3>', '</h3>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Heading3 size={15} /></button>
+                  <button type="button" title="Heading 1 — largest title" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<h1>', '</h1>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Heading1 size={15} /></button>
+                  <button type="button" title="Heading 2 — section title" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<h2>', '</h2>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Heading2 size={15} /></button>
+                  <button type="button" title="Heading 3 — sub-section title" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<h3>', '</h3>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Heading3 size={15} /></button>
                   <div className="w-px h-6 bg-gray-200 mx-1" />
                   {/* Bullet list */}
-                  <button type="button" title="Bullet list — unordered dot list" onClick={() => wrapSelection('<ul>\n  <li>', '</li>\n</ul>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><List size={15} /></button>
+                  <button type="button" title="Bullet list — unordered dot list" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<ul>\n  <li>', '</li>\n</ul>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><List size={15} /></button>
                   {/* Numbered list */}
-                  <button type="button" title="Numbered list — ordered 1, 2, 3... list" onClick={() => wrapSelection('<ol>\n  <li>', '</li>\n</ol>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><ListOrdered size={15} /></button>
+                  <button type="button" title="Numbered list — ordered 1, 2, 3... list" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<ol>\n  <li>', '</li>\n</ol>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><ListOrdered size={15} /></button>
                   <div className="w-px h-6 bg-gray-200 mx-1" />
                   {/* Insert Link */}
                   <div className="relative">
                     <button
                       type="button"
                       title="Insert hyperlink — select text first, then click to add a URL"
+                      onMouseDown={e => e.preventDefault()}
                       onClick={() => { setShowHtmlLinkPopup(p => !p); setHtmlLinkUrl(''); }}
                       className="p-1.5 hover:bg-gray-100 rounded text-gray-600"
                     ><Link size={15} /></button>
@@ -690,10 +690,10 @@ const EmailTemplates = () => {
                     )}
                   </div>
                   {/* Remove Link */}
-                  <button type="button" title="Remove link — select linked text then click to strip the hyperlink" onClick={handleUnlink} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Link2Off size={15} /></button>
+                  <button type="button" title="Remove link — select linked text then click to strip the hyperlink" onMouseDown={e => e.preventDefault()} onClick={handleUnlink} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Link2Off size={15} /></button>
                   <div className="w-px h-6 bg-gray-200 mx-1" />
-                  {/* Clear formatting */}
-                  <button type="button" title="Clear formatting — strips all HTML tags from selected text" onClick={handleClearFormatting} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Eraser size={15} /></button>
+                  {/* Delete selected text */}
+                  <button type="button" title="Delete — removes the selected text from the body" onMouseDown={e => e.preventDefault()} onClick={handleClearFormatting} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Eraser size={15} /></button>
                 </div>
               )}
 
