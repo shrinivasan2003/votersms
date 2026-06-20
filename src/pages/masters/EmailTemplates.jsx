@@ -643,7 +643,7 @@ const EmailTemplates = () => {
               </div>
 
               {format === 'HTML' && (
-                <div className="flex items-center space-x-1 p-2 bg-white border border-brand-border rounded-t-lg border-b-0 overflow-x-auto">
+                <div className="flex items-center flex-wrap gap-y-1 space-x-1 p-2 bg-white border border-brand-border rounded-t-lg border-b-0">
                   {/* Bold */}
                   <button type="button" title="Bold — select text then click" onMouseDown={e => e.preventDefault()} onClick={() => wrapSelection('<strong>', '</strong>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Bold size={15} /></button>
                   {/* Italic */}
