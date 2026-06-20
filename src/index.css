@@ -7,3 +7,23 @@
     @apply font-sans bg-brand-bg text-brand-textPrimary;
   }
 }
+
+/* ── Quill editor overrides ── */
+.ql-container {
+  min-height: 320px;
+  font-size: 14px;
+  font-family: inherit;
+}
+.ql-editor {
+  min-height: 320px;
+  line-height: 1.6;
+}
+.ql-toolbar {
+  border-bottom: 1px solid #e2e8f0 !important;
+  background: #f8fafc;
+  flex-wrap: wrap;
+}
+.ql-container.ql-snow,
+.ql-toolbar.ql-snow {
+  border: none !important;
+}
