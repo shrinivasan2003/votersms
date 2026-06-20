@@ -465,7 +465,7 @@ def process_email_job(job_id: int):
                     "Subject":       subject,
                     "TextBody":      text_body,
                     "HtmlBody":      html_body,
-                    "MessageStream": "broadcast",
+                    "MessageStream": "outbound",
                     "TrackOpens":    True,
                     "TrackLinks":    "HtmlAndText",
                 }
