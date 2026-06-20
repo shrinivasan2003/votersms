@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Paperclip, Trash2, Upload } from 'lucide-react';
+import { Paperclip, Trash2, Upload, Bold, Italic, Strikethrough, Heading1, Heading2, Heading3, List, ListOrdered, Link, Link2Off, Eraser } from 'lucide-react';
 
 import { emailTemplatesApi, emailTemplateAttachmentsApi } from '../../api/email';
 import DataTable from '../../components/shared/DataTable';
@@ -151,9 +151,11 @@ const EmailTemplates = () => {
   const { setEmailContext }             = useNadia();
   const [showPreview, setShowPreview]   = useState(false);
   const [previewHtml, setPreviewHtml]   = useState('');
-  const [showLinkPopup, setShowLinkPopup] = useState(false);
-  const [linkText, setLinkText]           = useState('');
-  const [linkUrl, setLinkUrl]             = useState('');
+  const [showLinkPopup, setShowLinkPopup]         = useState(false);
+  const [showHtmlLinkPopup, setShowHtmlLinkPopup] = useState(false);
+  const [linkText, setLinkText]                   = useState('');
+  const [linkUrl, setLinkUrl]                     = useState('');
+  const [htmlLinkUrl, setHtmlLinkUrl]             = useState('');
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -264,6 +266,69 @@ const EmailTemplates = () => {
     setShowLinkPopup(false);
     setLinkText('');
     setLinkUrl('');
+  };
+
+  const wrapSelection = (openTag, closeTag) => {
+    const ta = bodyRef.current;
+    if (!ta) return;
+    const start  = ta.selectionStart;
+    const end    = ta.selectionEnd;
+    const before = ta.value.substring(0, start);
+    const sel    = ta.value.substring(start, end);
+    const after  = ta.value.substring(end);
+    ta.value = before + openTag + sel + closeTag + after;
+    ta.setSelectionRange(start + openTag.length, start + openTag.length + sel.length);
+    ta.focus();
+    setPreviewHtml(ta.value);
+  };
+
+  const handleHtmlInsertLink = () => {
+    const url = htmlLinkUrl.trim();
+    if (!url) return;
+    const ta = bodyRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end   = ta.selectionEnd;
+    const sel   = ta.value.substring(start, end) || url;
+    const before = ta.value.substring(0, start);
+    const after  = ta.value.substring(end);
+    const tag = `<a href="${url}">${sel}</a>`;
+    ta.value = before + tag + after;
+    ta.setSelectionRange(start, start + tag.length);
+    ta.focus();
+    setPreviewHtml(ta.value);
+    setShowHtmlLinkPopup(false);
+    setHtmlLinkUrl('');
+  };
+
+  const handleUnlink = () => {
+    const ta = bodyRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end   = ta.selectionEnd;
+    const sel   = ta.value.substring(start, end);
+    const stripped = sel.replace(/<a\b[^>]*>(.*?)<\/a>/gi, '$1');
+    const before = ta.value.substring(0, start);
+    const after  = ta.value.substring(end);
+    ta.value = before + stripped + after;
+    ta.setSelectionRange(start, start + stripped.length);
+    ta.focus();
+    setPreviewHtml(ta.value);
+  };
+
+  const handleClearFormatting = () => {
+    const ta = bodyRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end   = ta.selectionEnd;
+    const sel   = ta.value.substring(start, end);
+    const stripped = sel.replace(/<[^>]+>/g, '');
+    const before = ta.value.substring(0, start);
+    const after  = ta.value.substring(end);
+    ta.value = before + stripped + after;
+    ta.setSelectionRange(start, start + stripped.length);
+    ta.focus();
+    setPreviewHtml(ta.value);
   };
 
   // Called by NadiaAI when user clicks "Use This Template"
@@ -578,21 +643,57 @@ const EmailTemplates = () => {
 
               {format === 'HTML' && (
                 <div className="flex items-center space-x-1 p-2 bg-white border border-brand-border rounded-t-lg border-b-0 overflow-x-auto">
-                  <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600 font-bold min-w-[32px]">B</button>
-                  <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600 italic min-w-[32px]">I</button>
-                  <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600 line-through min-w-[32px]">S</button>
+                  {/* Bold */}
+                  <button type="button" title="Bold — select text then click" onClick={() => wrapSelection('<strong>', '</strong>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Bold size={15} /></button>
+                  {/* Italic */}
+                  <button type="button" title="Italic — select text then click" onClick={() => wrapSelection('<em>', '</em>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Italic size={15} /></button>
+                  {/* Strikethrough */}
+                  <button type="button" title="Strikethrough — select text then click" onClick={() => wrapSelection('<s>', '</s>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Strikethrough size={15} /></button>
                   <div className="w-px h-6 bg-gray-200 mx-1" />
-                  <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600 text-xs font-bold">H1</button>
-                  <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600 text-xs font-bold">H2</button>
-                  <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600 text-xs font-bold">H3</button>
+                  {/* Headings */}
+                  <button type="button" title="Heading 1 — largest title" onClick={() => wrapSelection('<h1>', '</h1>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Heading1 size={15} /></button>
+                  <button type="button" title="Heading 2 — section title" onClick={() => wrapSelection('<h2>', '</h2>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Heading2 size={15} /></button>
+                  <button type="button" title="Heading 3 — sub-section title" onClick={() => wrapSelection('<h3>', '</h3>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Heading3 size={15} /></button>
                   <div className="w-px h-6 bg-gray-200 mx-1" />
-                  <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600">•</button>
-                  <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600 text-xs">1.</button>
+                  {/* Bullet list */}
+                  <button type="button" title="Bullet list — unordered dot list" onClick={() => wrapSelection('<ul>\n  <li>', '</li>\n</ul>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><List size={15} /></button>
+                  {/* Numbered list */}
+                  <button type="button" title="Numbered list — ordered 1, 2, 3... list" onClick={() => wrapSelection('<ol>\n  <li>', '</li>\n</ol>')} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><ListOrdered size={15} /></button>
                   <div className="w-px h-6 bg-gray-200 mx-1" />
-                  <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600">🔗</button>
-                  <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600 relative">🔗<span className="text-[10px] absolute top-0 right-0">✕</span></button>
+                  {/* Insert Link */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      title="Insert hyperlink — select text first, then click to add a URL"
+                      onClick={() => { setShowHtmlLinkPopup(p => !p); setHtmlLinkUrl(''); }}
+                      className="p-1.5 hover:bg-gray-100 rounded text-gray-600"
+                    ><Link size={15} /></button>
+                    {showHtmlLinkPopup && (
+                      <div className="absolute z-50 top-9 left-0 bg-white border border-gray-200 rounded-xl shadow-lg p-4 w-64 space-y-3">
+                        <p className="text-xs font-bold text-brand-textPrimary">Insert Hyperlink</p>
+                        <p className="text-[10px] text-gray-400">Select text in the body first, then enter a URL. Selected text becomes the clickable label.</p>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-brand-textMuted font-semibold">URL *</label>
+                          <input
+                            type="url"
+                            value={htmlLinkUrl}
+                            onChange={e => setHtmlLinkUrl(e.target.value)}
+                            placeholder="https://example.com"
+                            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-brand-blue"
+                          />
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <button type="button" onClick={handleHtmlInsertLink} className="flex-1 py-1.5 text-xs font-bold text-white rounded-lg" style={{ backgroundColor: '#0047AB' }}>Insert</button>
+                          <button type="button" onClick={() => setShowHtmlLinkPopup(false)} className="flex-1 py-1.5 text-xs font-bold bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">Cancel</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* Remove Link */}
+                  <button type="button" title="Remove link — select linked text then click to strip the hyperlink" onClick={handleUnlink} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Link2Off size={15} /></button>
                   <div className="w-px h-6 bg-gray-200 mx-1" />
-                  <button type="button" className="p-1.5 hover:bg-gray-100 rounded text-gray-600 text-xs font-medium">Clear</button>
+                  {/* Clear formatting */}
+                  <button type="button" title="Clear formatting — strips all HTML tags from selected text" onClick={handleClearFormatting} className="p-1.5 hover:bg-gray-100 rounded text-gray-600"><Eraser size={15} /></button>
                 </div>
               )}
 
