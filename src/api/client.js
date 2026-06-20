@@ -13,7 +13,7 @@ const request = async (url, { headers: callerHeaders = {}, ...rest } = {}) => {
 export const get = (url, options) => request(url, { method: 'GET', ...options });
 export const post = (url, data, options) => request(url, { method: 'POST', body: JSON.stringify(data), ...options });
 export const put = (url, data, options) => request(url, { method: 'PUT', body: JSON.stringify(data), ...options });
-export const patch = (url, options) => request(url, { method: 'PATCH', ...options });
+export const patch = (url, data, options) => request(url, { method: 'PATCH', body: JSON.stringify(data), ...options });
 export const del = (url, options) => request(url, { method: 'DELETE', ...options });
 
 // For endpoints that return plain text (e.g. CSV downloads)

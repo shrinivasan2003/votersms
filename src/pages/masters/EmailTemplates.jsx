@@ -565,7 +565,7 @@ const EmailTemplates = () => {
                         srcDoc={htmlBody || '<div style="padding:32px;color:#aaa;font-family:sans-serif;text-align:center;">Paste HTML to see a preview...</div>'}
                         className="w-full bg-white"
                         style={{ height: '520px', border: 'none' }}
-                        sandbox=""
+                        sandbox="allow-same-origin"
                       />
                     </div>
                   )}

@@ -79,12 +79,19 @@ async def receive_inbound_email(
         except (ValueError, IndexError):
             pass
 
-    # ── 2. Fallback: match voter by sender email ─────────────────────────────
+    # ── 2. Fallback: match voter by sender email scoped to customer ──────────
     if voter_id is None:
-        row = db.execute(
-            text("SELECT id, customer_id FROM voters WHERE email=:email LIMIT 1"),
-            {"email": from_email},
-        ).fetchone()
+        # If we resolved customer_id via MailboxHash, scope the lookup to that customer
+        if customer_id:
+            row = db.execute(
+                text("SELECT id, customer_id FROM voters WHERE email=:email AND customer_id=:cid LIMIT 1"),
+                {"email": from_email, "cid": customer_id},
+            ).fetchone()
+        else:
+            row = db.execute(
+                text("SELECT id, customer_id FROM voters WHERE email=:email LIMIT 1"),
+                {"email": from_email},
+            ).fetchone()
         if row:
             voter_id    = row[0]
             customer_id = row[1]

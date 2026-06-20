@@ -1,4 +1,4 @@
-import { get, post, put, del } from './client';
+import { get, post, put, patch, del } from './client';
 
 export const emailProvidersApi = {
   list: ()           => get('/api/email-providers'),
@@ -57,7 +57,7 @@ export const emailTemplateAttachmentsApi = {
 
 export const emailRepliesApi = {
   list: (params = {})    => get('/api/email-replies' + _qs(params)),
-  markRead: (id)         => put(`/api/email-replies/${id}/read`, {}),
+  markRead: (id)         => patch(`/api/email-replies/${id}/read`, {}),
   remove: (id)           => del(`/api/email-replies/${id}`),
 };
 
