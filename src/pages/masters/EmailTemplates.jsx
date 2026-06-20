@@ -156,6 +156,8 @@ const EmailTemplates = () => {
   const [linkText, setLinkText]                   = useState('');
   const [linkUrl, setLinkUrl]                     = useState('');
   const [htmlLinkUrl, setHtmlLinkUrl]             = useState('');
+  const savedSelStart = useRef(0);
+  const savedSelEnd   = useRef(0);
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -287,12 +289,12 @@ const EmailTemplates = () => {
     if (!url) return;
     const ta = bodyRef.current;
     if (!ta) return;
-    const start = ta.selectionStart;
-    const end   = ta.selectionEnd;
-    const sel   = ta.value.substring(start, end) || url;
+    const start  = savedSelStart.current;
+    const end    = savedSelEnd.current;
+    const sel    = ta.value.substring(start, end) || url;
     const before = ta.value.substring(0, start);
     const after  = ta.value.substring(end);
-    const tag = `<a href="${url}">${sel}</a>`;
+    const tag    = `<a href="${url}">${sel}</a>`;
     ta.value = before + tag + after;
     ta.setSelectionRange(start, start + tag.length);
     ta.focus();
@@ -665,7 +667,12 @@ const EmailTemplates = () => {
                       type="button"
                       title="Insert hyperlink — select text first, then click to add a URL"
                       onMouseDown={e => e.preventDefault()}
-                      onClick={() => { setShowHtmlLinkPopup(p => !p); setHtmlLinkUrl(''); }}
+                      onClick={() => {
+                        const ta = bodyRef.current;
+                        if (ta) { savedSelStart.current = ta.selectionStart; savedSelEnd.current = ta.selectionEnd; }
+                        setShowHtmlLinkPopup(p => !p);
+                        setHtmlLinkUrl('');
+                      }}
                       className="p-1.5 hover:bg-gray-100 rounded text-gray-600"
                     ><Link size={15} /></button>
                     {showHtmlLinkPopup && (
