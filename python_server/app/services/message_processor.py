@@ -358,8 +358,10 @@ def _wrap_html(fragment: str) -> str:
     return (
         "<!DOCTYPE html><html><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<style>body{font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#222;max-width:600px;margin:0 auto;padding:20px}"
+        "p{margin:0 0 4px 0}</style>"
         "</head>"
-        "<body style='font-family:sans-serif;font-size:15px;line-height:1.6;color:#222;max-width:600px;margin:0 auto;padding:20px'>"
+        "<body>"
         f"{fragment}"
         "</body></html>"
     )
