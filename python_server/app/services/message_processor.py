@@ -444,13 +444,11 @@ def process_email_job(job_id: int):
         with httpx.Client() as client:
             for voter in voters:
                 substituted = _substitute(template.body, voter, meta_by_voter.get(voter["id"], {}))
-                if getattr(template, "type", "Plain Text") == "HTML":
-                    html_body = substituted
-                    text_body = ""
-                else:
-                    # Quill editor stores rich text as HTML; strip tags for true plain text delivery
-                    text_body = _html_to_plain(substituted)
-                    html_body = ""
+                # Both modes (Quill "Plain Text" and raw "HTML") produce HTML content.
+                # Always send as HtmlBody so links are clickable and Postmark renders
+                # the unsubscribe footer as a styled word rather than a raw URL.
+                html_body = substituted
+                text_body = ""
                 from_address = (
                     f"{provider.smtp_user} <{provider.config_email}>"
                     if provider.smtp_user else provider.config_email
