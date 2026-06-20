@@ -350,15 +350,19 @@ def process_sms_job(job_id: int):
 
 # ── Email helpers ─────────────────────────────────────────────────────────────
 
-def _html_to_plain(html_body: str) -> str:
-    """Strip HTML tags from Quill-generated HTML to get plain text."""
-    # Replace block-level line breaks before stripping tags
-    text = re.sub(r'<br\s*/?>', '\n', html_body, flags=re.IGNORECASE)
-    text = re.sub(r'</p>', '\n', text, flags=re.IGNORECASE)
-    text = re.sub(r'<[^>]+>', '', text)
-    # Decode common HTML entities
-    text = text.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&nbsp;', ' ').replace('&#39;', "'").replace('&quot;', '"')
-    return text.strip()
+def _wrap_html(fragment: str) -> str:
+    """Wrap a Quill HTML fragment in a full HTML document.
+    Postmark requires this to inject styled unsubscribe footer and tracking pixel."""
+    if fragment.strip().lower().startswith('<!doctype') or fragment.strip().lower().startswith('<html'):
+        return fragment
+    return (
+        "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "</head>"
+        "<body style='font-family:sans-serif;font-size:15px;line-height:1.6;color:#222;max-width:600px;margin:0 auto;padding:20px'>"
+        f"{fragment}"
+        "</body></html>"
+    )
 
 
 # ── Email ─────────────────────────────────────────────────────────────────────
@@ -444,10 +448,9 @@ def process_email_job(job_id: int):
         with httpx.Client() as client:
             for voter in voters:
                 substituted = _substitute(template.body, voter, meta_by_voter.get(voter["id"], {}))
-                # Both modes (Quill "Plain Text" and raw "HTML") produce HTML content.
-                # Always send as HtmlBody so links are clickable and Postmark renders
-                # the unsubscribe footer as a styled word rather than a raw URL.
-                html_body = substituted
+                # Wrap in full HTML document so Postmark can inject styled unsubscribe
+                # footer and tracking pixel correctly. Works for both Quill and raw HTML.
+                html_body = _wrap_html(substituted)
                 text_body = ""
                 from_address = (
                     f"{provider.smtp_user} <{provider.config_email}>"
