@@ -350,21 +350,15 @@ def process_sms_job(job_id: int):
 
 # ── Email helpers ─────────────────────────────────────────────────────────────
 
-def _text_to_html(text_body: str) -> str:
-    """Wrap plain text in minimal HTML so Postmark's tracking pixel can be injected."""
-    escaped = (
-        text_body
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-    )
-    html_body = escaped.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "<br>\n")
-    return (
-        "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
-        f"<body style='font-family:sans-serif;font-size:15px;line-height:1.6'>"
-        f"{html_body}"
-        "</body></html>"
-    )
+def _html_to_plain(html_body: str) -> str:
+    """Strip HTML tags from Quill-generated HTML to get plain text."""
+    # Replace block-level line breaks before stripping tags
+    text = re.sub(r'<br\s*/?>', '\n', html_body, flags=re.IGNORECASE)
+    text = re.sub(r'</p>', '\n', text, flags=re.IGNORECASE)
+    text = re.sub(r'<[^>]+>', '', text)
+    # Decode common HTML entities
+    text = text.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&nbsp;', ' ').replace('&#39;', "'").replace('&quot;', '"')
+    return text.strip()
 
 
 # ── Email ─────────────────────────────────────────────────────────────────────
@@ -454,8 +448,9 @@ def process_email_job(job_id: int):
                     html_body = substituted
                     text_body = ""
                 else:
-                    text_body = substituted
-                    html_body = _text_to_html(text_body)
+                    # Quill editor stores rich text as HTML; strip tags for true plain text delivery
+                    text_body = _html_to_plain(substituted)
+                    html_body = ""
                 from_address = (
                     f"{provider.smtp_user} <{provider.config_email}>"
                     if provider.smtp_user else provider.config_email
