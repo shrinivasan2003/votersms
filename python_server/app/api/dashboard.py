@@ -81,7 +81,7 @@ def get_recent_jobs(
     sql = text(f"""
         (SELECT j.id, 'SMS' AS type, j.status,
                 t.name AS template, j.recipients,
-                '0/0' AS success_failed,
+                CONCAT(COALESCE(j.success_count, 0), '/', COALESCE(j.failed_count, 0)) AS success_failed,
                 j.created_at
          FROM sms_jobs j
          LEFT JOIN sms_templates t ON j.template_id = t.id
@@ -89,7 +89,7 @@ def get_recent_jobs(
         UNION ALL
         (SELECT j.id, 'Email' AS type, j.status,
                 t.name AS template, j.recipients,
-                '0/0' AS success_failed,
+                CONCAT(COALESCE(j.success_count, 0), '/', COALESCE(j.failed_count, 0)) AS success_failed,
                 j.created_at
          FROM email_jobs j
          LEFT JOIN email_templates t ON j.template_id = t.id
