@@ -4,6 +4,7 @@ Email analytics API.
 GET /api/email-analytics          — per-job aggregate stats (open rate, click rate…)
 GET /api/email-analytics/{job_id} — detailed stats + recent event feed for one job
 """
+from datetime import timezone
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -13,6 +14,41 @@ from app.schemas import UserOut
 from app.dependencies.security import get_current_user
 
 router = APIRouter()
+
+
+_BOT_COL_AVAILABLE: bool | None = None   # None = unknown; checked lazily, cached per process
+
+
+def _has_bot_column(db: Session) -> bool:
+    """Whether email_events.is_bot_suspected exists (migrate_email_events_v3.py has run)."""
+    global _BOT_COL_AVAILABLE
+    if _BOT_COL_AVAILABLE is None:
+        try:
+            db.execute(text("SELECT is_bot_suspected FROM email_events LIMIT 0"))
+            _BOT_COL_AVAILABLE = True
+        except Exception:
+            db.rollback()
+            _BOT_COL_AVAILABLE = False
+    return _BOT_COL_AVAILABLE
+
+
+def _bot_exclude_sql(db: Session, alias: str = "ee") -> str:
+    """
+    SQL fragment (leading ' AND ...') that excludes events flagged as
+    likely mail-gateway/scanner traffic from a CASE WHEN condition.
+    Empty string if the migration hasn't been run yet.
+    """
+    if not _has_bot_column(db):
+        return ""
+    return f" AND ({alias}.is_bot_suspected IS NULL OR {alias}.is_bot_suspected = 0)"
+
+
+def _iso_utc(dt):
+    """Serialize a naive DB datetime (stored as true UTC) with an explicit UTC
+    marker, so the frontend's Date parser doesn't misread it as local time."""
+    if dt is None:
+        return None
+    return dt.replace(tzinfo=timezone.utc).isoformat()
 
 
 def _calc_rates(row: dict) -> dict:
@@ -35,6 +71,7 @@ def list_email_analytics(
     cid = current_user.customer_id
     cid_filter = "WHERE ej.customer_id=:cid" if cid is not None else ""
     params = {"cid": cid} if cid is not None else {}
+    bot_excl = _bot_exclude_sql(db)
     try:
         result = db.execute(text(f"""
             SELECT
@@ -46,12 +83,12 @@ def list_email_analytics(
                 ej.status,
                 ej.created_at,
                 COUNT(DISTINCT ejm.id)                                      AS total_sent,
-                COUNT(DISTINCT CASE WHEN ee.event_type='open'   THEN ee.postmark_message_id END)
+                COUNT(DISTINCT CASE WHEN ee.event_type='open'{bot_excl}   THEN ee.postmark_message_id END)
                                                                             AS unique_opens,
-                SUM(CASE WHEN ee.event_type='open'    THEN 1 ELSE 0 END)   AS total_opens,
-                COUNT(DISTINCT CASE WHEN ee.event_type='click'  THEN ee.postmark_message_id END)
+                SUM(CASE WHEN ee.event_type='open'{bot_excl}    THEN 1 ELSE 0 END)   AS total_opens,
+                COUNT(DISTINCT CASE WHEN ee.event_type='click'{bot_excl}  THEN ee.postmark_message_id END)
                                                                             AS unique_clicks,
-                SUM(CASE WHEN ee.event_type='click'   THEN 1 ELSE 0 END)   AS total_clicks,
+                SUM(CASE WHEN ee.event_type='click'{bot_excl}   THEN 1 ELSE 0 END)   AS total_clicks,
                 SUM(CASE WHEN ee.event_type='bounce'  THEN 1 ELSE 0 END)   AS bounces,
                 SUM(CASE WHEN ee.event_type='spam'    THEN 1 ELSE 0 END)   AS spam_complaints,
                 SUM(CASE WHEN ee.event_type='delivery' THEN 1 ELSE 0 END)  AS deliveries
@@ -106,17 +143,27 @@ def get_email_analytics_detail(
       • recent event feed (latest 200 events)
     """
     try:
+        bot_excl = _bot_exclude_sql(db)
+        has_bot_col = _has_bot_column(db)
+
         # ── Aggregate summary ──
-        summary_row = db.execute(text("""
+        # unique_opens/total_opens/unique_clicks/total_clicks exclude events
+        # flagged as likely mail-gateway/scanner traffic (is_bot_suspected),
+        # since those aren't genuine recipient engagement. bot_suspected_*
+        # is reported separately so nothing is silently hidden.
+        summary_row = db.execute(text(f"""
             SELECT
                 COUNT(DISTINCT ejm.id)                                          AS total_sent,
-                COUNT(DISTINCT CASE WHEN ee.event_type='open'  THEN ejm.id END)AS unique_opens,
-                SUM(CASE WHEN ee.event_type='open'   THEN 1 ELSE 0 END)        AS total_opens,
-                COUNT(DISTINCT CASE WHEN ee.event_type='click' THEN ejm.id END)AS unique_clicks,
-                SUM(CASE WHEN ee.event_type='click'  THEN 1 ELSE 0 END)        AS total_clicks,
+                COUNT(DISTINCT CASE WHEN ee.event_type='open'{bot_excl}  THEN ejm.id END)AS unique_opens,
+                SUM(CASE WHEN ee.event_type='open'{bot_excl}   THEN 1 ELSE 0 END)        AS total_opens,
+                COUNT(DISTINCT CASE WHEN ee.event_type='click'{bot_excl} THEN ejm.id END)AS unique_clicks,
+                SUM(CASE WHEN ee.event_type='click'{bot_excl}  THEN 1 ELSE 0 END)        AS total_clicks,
                 SUM(CASE WHEN ee.event_type='bounce' THEN 1 ELSE 0 END)        AS bounces,
                 SUM(CASE WHEN ee.event_type='spam'   THEN 1 ELSE 0 END)        AS spam_complaints,
                 SUM(CASE WHEN ee.event_type='delivery' THEN 1 ELSE 0 END)      AS deliveries
+                {", SUM(CASE WHEN ee.event_type='open' AND ee.is_bot_suspected=1 THEN 1 ELSE 0 END) AS bot_suspected_opens,"
+                 " SUM(CASE WHEN ee.event_type='click' AND ee.is_bot_suspected=1 THEN 1 ELSE 0 END) AS bot_suspected_clicks" if has_bot_col else
+                 ", 0 AS bot_suspected_opens, 0 AS bot_suspected_clicks"}
             FROM email_job_messages ejm
             LEFT JOIN email_events ee ON ejm.postmark_message_id = ee.postmark_message_id
             WHERE ejm.job_id = :jid
@@ -149,7 +196,8 @@ def get_email_analytics_detail(
         """), {"jid": job_id}).fetchall()
 
         # ── Recent event feed ──
-        events = db.execute(text("""
+        bot_col_select = "ee.is_bot_suspected" if has_bot_col else "0 AS is_bot_suspected"
+        events = db.execute(text(f"""
             SELECT
                 ee.recipient_email,
                 ee.event_type,
@@ -159,6 +207,7 @@ def get_email_analytics_detail(
                 ee.click_url,
                 ee.read_seconds,
                 ee.is_first_event,
+                {bot_col_select},
                 ee.occurred_at
             FROM email_events ee
             JOIN email_job_messages ejm ON ee.postmark_message_id = ejm.postmark_message_id
@@ -168,7 +217,9 @@ def get_email_analytics_detail(
         """), {"jid": job_id}).fetchall()
 
         # ── Per-recipient status ──
-        recipients = db.execute(text("""
+        # opened/clicked/last_*_at exclude bot-suspected events so a recipient
+        # isn't shown as having "opened" an email a security scanner prefetched.
+        recipients = db.execute(text(f"""
             SELECT
                 ejm.voter_id,
                 COALESCE(NULLIF(TRIM(CONCAT(v.first_name, ' ', COALESCE(v.last_name,''))), ''), ejm.recipient_email)
@@ -176,13 +227,13 @@ def get_email_analytics_detail(
                 ejm.recipient_email,
                 ejm.sent_at,
                 MAX(CASE WHEN ee.event_type='delivery' THEN 1 ELSE 0 END) AS delivered,
-                MAX(CASE WHEN ee.event_type='open'     THEN 1 ELSE 0 END) AS opened,
-                MAX(CASE WHEN ee.event_type='click'    THEN 1 ELSE 0 END) AS clicked,
+                MAX(CASE WHEN ee.event_type='open'{bot_excl}     THEN 1 ELSE 0 END) AS opened,
+                MAX(CASE WHEN ee.event_type='click'{bot_excl}    THEN 1 ELSE 0 END) AS clicked,
                 MAX(CASE WHEN ee.event_type='bounce'   THEN 1 ELSE 0 END) AS bounced,
                 MAX(CASE WHEN ee.event_type='spam'     THEN 1 ELSE 0 END) AS spam,
-                SUM(CASE WHEN ee.event_type='open'     THEN 1 ELSE 0 END) AS total_opens,
-                MAX(CASE WHEN ee.event_type='open'  THEN ee.occurred_at END) AS last_opened_at,
-                MAX(CASE WHEN ee.event_type='click' THEN ee.occurred_at END) AS last_clicked_at
+                SUM(CASE WHEN ee.event_type='open'{bot_excl}     THEN 1 ELSE 0 END) AS total_opens,
+                MAX(CASE WHEN ee.event_type='open'{bot_excl}  THEN ee.occurred_at END) AS last_opened_at,
+                MAX(CASE WHEN ee.event_type='click'{bot_excl} THEN ee.occurred_at END) AS last_clicked_at
             FROM email_job_messages ejm
             LEFT JOIN voters      v  ON ejm.voter_id        = v.id
             LEFT JOIN email_events ee ON ejm.postmark_message_id = ee.postmark_message_id
@@ -190,17 +241,34 @@ def get_email_analytics_detail(
             GROUP BY ejm.id, ejm.voter_id, ejm.recipient_email, ejm.sent_at,
                      v.first_name, v.last_name
             ORDER BY
-                MAX(CASE WHEN ee.event_type='open' THEN 1 ELSE 0 END) DESC,
+                MAX(CASE WHEN ee.event_type='open'{bot_excl} THEN 1 ELSE 0 END) DESC,
                 ejm.sent_at ASC
         """), {"jid": job_id}).fetchall()
+
+        # ── Serialize: mark naive-UTC datetimes explicitly so the frontend's
+        #    Date parser doesn't misread them as local time (the root cause
+        #    of the "wrong When times" bug) ──
+        events_out = []
+        for r in events:
+            row = dict(r._mapping)
+            row["occurred_at"] = _iso_utc(row.get("occurred_at"))
+            events_out.append(row)
+
+        recipients_out = []
+        for r in recipients:
+            row = dict(r._mapping)
+            row["sent_at"]         = _iso_utc(row.get("sent_at"))
+            row["last_opened_at"]  = _iso_utc(row.get("last_opened_at"))
+            row["last_clicked_at"] = _iso_utc(row.get("last_clicked_at"))
+            recipients_out.append(row)
 
         return {
             "job_id": job_id,
             "summary": summary,
             "platforms": [dict(r._mapping) for r in platforms],
             "clients": [dict(r._mapping) for r in clients],
-            "recent_events": [dict(r._mapping) for r in events],
-            "recipients": [dict(r._mapping) for r in recipients],
+            "recent_events": events_out,
+            "recipients": recipients_out,
         }
     except Exception as e:
         err_str = str(e).lower()
