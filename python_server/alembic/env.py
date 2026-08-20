@@ -16,12 +16,35 @@ if config.config_file_name is not None:
 
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from app.database import Base, DB_URL
+from app.database import DB_URL
 config.set_main_option('sqlalchemy.url', DB_URL)
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = Base.metadata
+
+# The app's runtime model layer (app/models) uses SQLAlchemy automap to
+# reflect tables directly from the live DB, rather than declaring them
+# against app.database.Base — so Base.metadata is always empty and is
+# NOT usable as Alembic's diff target (comparing against it would make
+# autogenerate think every real table should be dropped).
+#
+# Instead, target_metadata is built by reflecting the *actual* live
+# schema at the moment `alembic revision --autogenerate` runs. This
+# makes autogenerate diff "live schema" vs "live schema" for any table
+# that hasn't changed — i.e. it only proposes changes for tables you've
+# actually edited since the last migration, exactly like a normal
+# Alembic setup with declared models would.
+from sqlalchemy import create_engine, MetaData
+
+target_metadata = MetaData()
+
+
+def _reflect_target_metadata():
+    reflect_engine = create_engine(DB_URL)
+    try:
+        target_metadata.reflect(bind=reflect_engine)
+    finally:
+        reflect_engine.dispose()
+
+
+_reflect_target_metadata()
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
