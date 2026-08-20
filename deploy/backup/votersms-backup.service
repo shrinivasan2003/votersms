@@ -1,0 +1,8 @@
+[Unit]
+Description=VoterSMS nightly database backup
+After=mysql.service
+Requires=mysql.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/votersms/deploy/backup/backup_db.sh
