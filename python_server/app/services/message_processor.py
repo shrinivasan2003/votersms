@@ -494,13 +494,18 @@ def process_email_job(job_id: int):
                         if message_id:
                             db.execute(text("""
                                 INSERT IGNORE INTO email_job_messages
-                                    (job_id, voter_id, postmark_message_id, recipient_email)
-                                VALUES (:job_id, :voter_id, :mid, :email)
+                                    (job_id, voter_id, postmark_message_id, recipient_email, sent_at)
+                                VALUES (:job_id, :voter_id, :mid, :email, :sent_at)
                             """), {
                                 "job_id":   job_id,
                                 "voter_id": voter["id"],
                                 "mid":      message_id,
                                 "email":    voter["email"],
+                                # Explicit UTC (not MySQL's CURRENT_TIMESTAMP, whose
+                                # timezone depends on the server's session settings)
+                                # so it can be compared directly against the UTC
+                                # occurred_at values stored from Postmark webhooks.
+                                "sent_at":  datetime.utcnow(),
                             })
                             db.commit()
                         success_count += 1

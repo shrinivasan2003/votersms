@@ -9,17 +9,37 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { emailAnalyticsApi } from '../../api/email';
-import { BarChart2, Monitor, Smartphone, Tablet, RefreshCw, CheckCircle2, XCircle, MousePointerClick, AlertTriangle, Mail } from 'lucide-react';
+import { customersApi } from '../../api/customers';
+import { BarChart2, Monitor, Smartphone, Tablet, RefreshCw, CheckCircle2, XCircle, MousePointerClick, AlertTriangle, Mail, Bot } from 'lucide-react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const fmtDateTime = (d) =>
-  d
-    ? new Date(d).toLocaleString('en-US', {
-        month: 'short', day: 'numeric', year: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-      })
-    : '—';
+// Backend returns occurred_at/sent_at as UTC ISO strings (explicit offset).
+// Fall back to treating a bare (no 'Z'/offset) string as UTC too, in case an
+// older cached response ever sneaks through, so times are never silently
+// misread as the browser's local zone.
+const parseUTC = (d) => {
+  if (!d) return null;
+  const s = typeof d === 'string' && !(d.includes('Z') || /[+-]\d\d:\d\d$/.test(d)) ? d + 'Z' : d;
+  return new Date(s);
+};
+
+const fmtDateTime = (d, ianaTz) => {
+  const dt = parseUTC(d);
+  if (!dt || isNaN(dt)) return '—';
+  try {
+    return dt.toLocaleString('en-US', {
+      timeZone: ianaTz || undefined,
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return dt.toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    });
+  }
+};
 
 const PlatformIcon = ({ platform }) => {
   const p = (platform || '').toLowerCase();
@@ -50,6 +70,7 @@ const EmailAnalyticsModal = ({ job, onClose }) => {
   const [data, setData]             = useState(null);
   const [loading, setLoading]       = useState(true);
   const [recipientFilter, setRecipientFilter] = useState('all'); // 'all' | 'opened' | 'not_opened'
+  const [customerTz, setCustomerTz] = useState('');
 
   const load = useCallback(() => {
     setLoading(true);
@@ -60,6 +81,11 @@ const EmailAnalyticsModal = ({ job, onClose }) => {
   }, [job.job_id]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    customersApi.getMySettings()
+      .then((s) => setCustomerTz(s?.timezone || ''))
+      .catch(() => {});
+  }, []);
 
   // Build subtitle from available job metadata
   const parts = [job.precinct_name || job.list_name, job.template_name].filter(Boolean);
@@ -127,6 +153,15 @@ const EmailAnalyticsModal = ({ job, onClose }) => {
                   </div>
                 ))}
               </div>
+
+              {(data.summary.bot_suspected_opens > 0 || data.summary.bot_suspected_clicks > 0) && (
+                <p className="text-xs text-gray-400 flex items-center gap-1.5 -mt-2">
+                  <Bot size={13} />
+                  {data.summary.bot_suspected_opens || 0} open{data.summary.bot_suspected_opens === 1 ? '' : 's'} and{' '}
+                  {data.summary.bot_suspected_clicks || 0} click{data.summary.bot_suspected_clicks === 1 ? '' : 's'} above look like
+                  automated mail-security scanners, not real recipients — excluded from these counts.
+                </p>
+              )}
 
               {/* Bounces + Spam row */}
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
@@ -286,7 +321,7 @@ const EmailAnalyticsModal = ({ job, onClose }) => {
                                   : <span className="text-gray-300 text-xs">—</span>}
                               </td>
                               <td className="px-4 py-3 text-xs text-brand-textMuted whitespace-nowrap">
-                                {r.last_opened_at ? fmtDateTime(r.last_opened_at) : <span className="text-gray-300">—</span>}
+                                {r.last_opened_at ? fmtDateTime(r.last_opened_at, customerTz) : <span className="text-gray-300">—</span>}
                               </td>
                             </tr>
                           ))}
@@ -326,9 +361,19 @@ const EmailAnalyticsModal = ({ job, onClose }) => {
                       </thead>
                       <tbody className="bg-white divide-y divide-brand-border">
                         {data.recent_events.map((ev, i) => (
-                          <tr key={i} className="hover:bg-gray-50 transition-colors">
+                          <tr key={i} className={`hover:bg-gray-50 transition-colors ${ev.is_bot_suspected ? 'opacity-60' : ''}`}>
                             <td className="px-4 py-3 whitespace-nowrap">
-                              <EventTypeBadge type={ev.event_type} />
+                              <div className="flex items-center gap-1.5">
+                                <EventTypeBadge type={ev.event_type} />
+                                {!!ev.is_bot_suspected && (
+                                  <span
+                                    title="Looks like an automated mail-security scanner (e.g. Safe Links / URL Defense) rather than a real recipient — excluded from headline counts."
+                                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500"
+                                  >
+                                    <Bot size={11} /> Scanner?
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="px-4 py-3 text-brand-textPrimary font-medium max-w-[180px] truncate">
                               {ev.recipient_email}
@@ -341,7 +386,7 @@ const EmailAnalyticsModal = ({ job, onClose }) => {
                             </td>
                             <td className="px-4 py-3 text-brand-textSecondary whitespace-nowrap">{ev.client_name || '—'}</td>
                             <td className="px-4 py-3 text-brand-textSecondary whitespace-nowrap">{ev.os_name || '—'}</td>
-                            <td className="px-4 py-3 text-brand-textMuted whitespace-nowrap text-xs">{fmtDateTime(ev.occurred_at)}</td>
+                            <td className="px-4 py-3 text-brand-textMuted whitespace-nowrap text-xs">{fmtDateTime(ev.occurred_at, customerTz)}</td>
                           </tr>
                         ))}
                       </tbody>
