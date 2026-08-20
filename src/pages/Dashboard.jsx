@@ -236,7 +236,10 @@ const Dashboard = () => {
       }
     };
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(() => {
+      if (document.hidden) return; // skip while tab is backgrounded
+      fetchData();
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 

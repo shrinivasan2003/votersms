@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { smsJobsApi } from '../api/sms';
 import { emailJobsApi } from '../api/email';
 import { whatsappJobsApi } from '../api/whatsapp';
+import { dedupeFetch } from '../utils/dedupeFetch';
 
 const INTERVAL_MS = 5000;
 
@@ -18,11 +19,12 @@ export function useGlobalJobNotifications() {
 
   useEffect(() => {
     const poll = async () => {
+      if (document.hidden) return; // skip while tab is backgrounded
       try {
         const [sms, email, wa] = await Promise.all([
-          smsJobsApi.list().catch(() => []),
-          emailJobsApi.list().catch(() => []),
-          whatsappJobsApi.list().catch(() => []),
+          dedupeFetch('sms-jobs-list', () => smsJobsApi.list()).catch(() => []),
+          dedupeFetch('email-jobs-list', () => emailJobsApi.list()).catch(() => []),
+          dedupeFetch('whatsapp-jobs-list', () => whatsappJobsApi.list()).catch(() => []),
         ]);
 
         const all = [

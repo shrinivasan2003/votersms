@@ -10,7 +10,10 @@ export function useJobPolling(refreshFn, intervalMs = 5000) {
   refreshRef.current = refreshFn;
 
   useEffect(() => {
-    const id = setInterval(() => refreshRef.current?.(), intervalMs);
+    const id = setInterval(() => {
+      if (document.hidden) return; // skip while tab is backgrounded
+      refreshRef.current?.();
+    }, intervalMs);
     return () => clearInterval(id);
   }, [intervalMs]);
 }

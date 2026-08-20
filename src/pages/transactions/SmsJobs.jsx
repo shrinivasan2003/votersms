@@ -37,6 +37,7 @@ import { smsJobsApi, smsTemplatesApi, smsProvidersApi } from '../../api/sms';
 import { listsApi } from '../../api/lists';
 import { customersApi } from '../../api/customers';
 import { useAuth } from '../../contexts/AuthContext';
+import { dedupeFetch } from '../../utils/dedupeFetch';
 
 /* ── helper: display the recipient source in the table ── */
 const RecipientCell = ({ row }) => {
@@ -88,7 +89,9 @@ const SmsJobs = () => {
   // Silent refresh — only re-fetches the jobs list (no loading spinner)
   const refreshJobs = useCallback(async () => {
     try {
-      const data = await smsJobsApi.list();
+      // Same cache key as useGlobalJobNotifications — a call already in
+      // flight from that poller is reused instead of firing a duplicate.
+      const data = await dedupeFetch('sms-jobs-list', () => smsJobsApi.list());
       if (Array.isArray(data)) setJobs(data);
     } catch { /* silent */ }
   }, []);
