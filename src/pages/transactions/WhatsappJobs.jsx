@@ -7,6 +7,7 @@ import { useJobPolling } from '../../hooks/useJobPolling';
 import { whatsappJobsApi, whatsappTemplatesApi, whatsappProvidersApi } from '../../api/whatsapp';
 import { listsApi } from '../../api/lists';
 import { customersApi } from '../../api/customers';
+import { dedupeFetch } from '../../utils/dedupeFetch';
 
 // Parse a UTC datetime string from DB (may lack 'Z') as a proper UTC Date
 const parseUTC = (str) => {
@@ -81,7 +82,9 @@ const WhatsappJobs = () => {
 
   const refreshJobs = useCallback(async () => {
     try {
-      const data = await whatsappJobsApi.list();
+      // Same cache key as useGlobalJobNotifications — a call already in
+      // flight from that poller is reused instead of firing a duplicate.
+      const data = await dedupeFetch('whatsapp-jobs-list', () => whatsappJobsApi.list());
       if (Array.isArray(data)) setJobs(data);
     } catch { /* silent */ }
   }, []);

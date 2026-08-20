@@ -10,6 +10,7 @@ import { useJobPolling } from '../../hooks/useJobPolling';
 import { emailJobsApi, emailTemplatesApi, emailProvidersApi, emailAnalyticsApi } from '../../api/email';
 import { listsApi } from '../../api/lists';
 import { customersApi } from '../../api/customers';
+import { dedupeFetch } from '../../utils/dedupeFetch';
 
 const RecipientCell = ({ row }) => {
   if (row.voter_name && row.voter_id)
@@ -137,7 +138,9 @@ const EmailJobs = () => {
 
   const refreshJobs = useCallback(async () => {
     try {
-      const data = await emailJobsApi.list();
+      // Same cache key as useGlobalJobNotifications — a call already in
+      // flight from that poller is reused instead of firing a duplicate.
+      const data = await dedupeFetch('email-jobs-list', () => emailJobsApi.list());
       if (Array.isArray(data)) setJobs(data);
     } catch { /* silent */ }
   }, []);
