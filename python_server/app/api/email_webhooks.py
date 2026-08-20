@@ -40,8 +40,12 @@ SCANNER_CLIENT_MARKERS = (
 )
 # A real human cannot open/click an email this fast after it's sent —
 # this window catches gateway prefetching even when the client name is
-# generic/unidentified.
-BOT_WINDOW_SECONDS = 10
+# generic/unidentified. Kept short (rather than e.g. 10s) because genuine
+# gateway/proxy prefetching is near-instant (well under a couple of
+# seconds), while a real, attentive recipient can plausibly open an email
+# within 5-10 seconds — a wider window was flagging real fast opens
+# (e.g. testers watching for the email) as bots.
+BOT_WINDOW_SECONDS = 3
 
 
 def _looks_like_scanner(client_name, platform) -> bool:
