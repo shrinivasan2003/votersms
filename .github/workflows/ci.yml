@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python_server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Byte-compile all Python files
+        # scripts/ is excluded: it's a graveyard of abandoned one-off debug
+        # scripts, unused by the app, several already broken pre-existing —
+        # see repo history/PR for details rather than guessing fixes here.
+        run: |
+          python -m py_compile $(find . -name '*.py' -not -path './venv/*' -not -path './.venv/*' -not -path './scripts/*')
+
+      - name: Alembic migration chain sanity check
+        run: |
+          python -c "
+          import importlib.util, pathlib
+          for f in sorted(pathlib.Path('alembic/versions').glob('*.py')):
+              spec = importlib.util.spec_from_file_location(f.stem, f)
+              mod = importlib.util.module_from_spec(spec)
+              spec.loader.exec_module(mod)
+              assert hasattr(mod, 'upgrade') and hasattr(mod, 'downgrade'), f'{f} missing upgrade/downgrade'
+          print('All migration files load and define upgrade()/downgrade()')
+          "
+
+  frontend:
+    name: Frontend (React/Vite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (informational — not blocking yet, 289 pre-existing issues)
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Build
+        run: npm run build
