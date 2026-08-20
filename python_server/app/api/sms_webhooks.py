@@ -11,6 +11,7 @@ on each message.create() call in message_processor.py, pointing here:
 Twilio POSTs form-encoded data (not JSON).
 """
 import logging
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, Request, Query, Depends
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -57,10 +58,14 @@ async def receive_twilio_status_callback(
         result = db.execute(
             text("""
                 UPDATE sms_job_messages
-                SET status = :status, error_code = :error_code, error_message = :error_message
+                SET status = :status, error_code = :error_code, error_message = :error_message,
+                    updated_at = :updated_at
                 WHERE twilio_sid = :sid
             """),
-            {"status": status, "error_code": error_code, "error_message": error_message, "sid": sid},
+            {
+                "status": status, "error_code": error_code, "error_message": error_message,
+                "updated_at": datetime.utcnow(), "sid": sid,
+            },
         )
         db.commit()
         if result.rowcount == 0:
