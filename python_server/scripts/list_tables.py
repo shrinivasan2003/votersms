@@ -17,6 +17,9 @@ def list_tables():
     )
     try:
         with connection.cursor() as cursor:
+            cursor.execute("SHOW TABLES")
+            for row in cursor.fetchall():
+                print(list(row.values())[0])
     except Exception as e:
         print("Error:", e)
     finally:
