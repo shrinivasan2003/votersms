@@ -334,6 +334,8 @@ def process_sms_job(job_id: int):
                 logger.info(f"SMS Job {job_id}: all {total} message(s) sent successfully")
 
         job.recipients = total
+        job.success_count = success_count
+        job.failed_count = failed_count
         db.commit()
 
         # Spawn next occurrence if this is a recurring job
@@ -526,6 +528,8 @@ def process_email_job(job_id: int):
             if failed_count:
                 logger.warning(f"Email Job {job_id}: {success_count}/{total} sent, {failed_count} failed")
         job.recipients = total
+        job.success_count = success_count
+        job.failed_count = failed_count
         db.commit()
 
         # Spawn next occurrence if this is a recurring job
