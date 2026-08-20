@@ -36,6 +36,7 @@ from app.api import (
     sms_delivery_stats,
     process_jobs,
     email_webhooks,
+    sms_webhooks,
     email_inbound,
     email_analytics,
     contact_lists,
@@ -198,6 +199,7 @@ async def add_security_headers(request: Request, call_next):
 # Public routes (no JWT required)
 app.include_router(auth.router,           prefix="/api")
 app.include_router(email_webhooks.router, prefix="/api")
+app.include_router(sms_webhooks.router,   prefix="/api")
 app.include_router(email_inbound.router,  prefix="/api")   # Postmark inbound — public, secret-secured
 
 # Protected routes — every request must carry a valid Bearer token

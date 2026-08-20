@@ -306,21 +306,46 @@ def process_sms_job(job_id: int):
         success_count = 0
         failed_count  = 0
 
+        _app_url = os.getenv("APP_URL", "").rstrip("/")
+        _webhook_secret = os.getenv("WEBHOOK_SECRET", "")
+        status_callback_url = (
+            f"{_app_url}/api/sms-webhooks?secret={_webhook_secret}"
+            if _app_url and _webhook_secret else None
+        )
+
         for voter in voters:
             raw_phone  = voter.get("phone", "") or ""
             e164_phone = _normalize_phone(raw_phone)
             body       = _substitute(template.body, voter, meta_by_voter.get(voter["id"], {}))
             try:
-                message = twilio_client.messages.create(
-                    body=body,
-                    from_=provider.from_number,
-                    to=e164_phone
-                )
+                create_kwargs = dict(body=body, from_=provider.from_number, to=e164_phone)
+                if status_callback_url:
+                    create_kwargs["status_callback"] = status_callback_url
+                message = twilio_client.messages.create(**create_kwargs)
                 logger.info(f"SMS Job {job_id}: sent {message.sid} to {e164_phone} (raw: {raw_phone})")
                 success_count += 1
+                db.execute(text("""
+                    INSERT IGNORE INTO sms_job_messages
+                        (job_id, voter_id, twilio_sid, recipient_phone, status, sent_at)
+                    VALUES (:job_id, :voter_id, :sid, :phone, :status, :sent_at)
+                """), {
+                    "job_id": job_id, "voter_id": voter["id"], "sid": message.sid,
+                    "phone": e164_phone, "status": message.status or "queued",
+                    "sent_at": datetime.utcnow(),
+                })
+                db.commit()
             except Exception as e:
                 logger.error(f"SMS Job {job_id}: FAILED to send to {e164_phone} (raw: {raw_phone}): {e}")
                 failed_count += 1
+                db.execute(text("""
+                    INSERT INTO sms_job_messages
+                        (job_id, voter_id, twilio_sid, recipient_phone, status, error_message, sent_at)
+                    VALUES (:job_id, :voter_id, NULL, :phone, 'failed', :error_message, :sent_at)
+                """), {
+                    "job_id": job_id, "voter_id": voter["id"], "phone": e164_phone,
+                    "error_message": str(e)[:1000], "sent_at": datetime.utcnow(),
+                })
+                db.commit()
 
         total = success_count + failed_count
         if success_count == 0:

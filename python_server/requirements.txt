@@ -8,6 +8,7 @@ python-dotenv
 PyJWT
 twilio
 httpx
+python-multipart
 slowapi
 cryptography
 # Nadia AI provider SDKs
