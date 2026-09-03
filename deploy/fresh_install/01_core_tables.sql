@@ -1,0 +1,185 @@
+CREATE TABLE IF NOT EXISTS counties (
+	id INTEGER NOT NULL AUTO_INCREMENT, 
+	code VARCHAR(50) NOT NULL, 
+	name VARCHAR(255) NOT NULL, 
+	state VARCHAR(50) DEFAULT 'GA', 
+	status VARCHAR(20) DEFAULT 'Active', 
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, 
+	PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS email_providers (
+	id INTEGER NOT NULL AUTO_INCREMENT, 
+	code VARCHAR(50) NOT NULL, 
+	name VARCHAR(255) NOT NULL, 
+	type VARCHAR(50) DEFAULT 'SMTP', 
+	smtp_host VARCHAR(255), 
+	smtp_port VARCHAR(10), 
+	smtp_user VARCHAR(255), 
+	smtp_pass VARCHAR(255), 
+	config_email VARCHAR(255), 
+	status VARCHAR(20) DEFAULT 'Active', 
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, 
+	PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS email_templates (
+	id INTEGER NOT NULL AUTO_INCREMENT, 
+	code VARCHAR(50) NOT NULL, 
+	name VARCHAR(255) NOT NULL, 
+	subject VARCHAR(255) NOT NULL, 
+	body TEXT NOT NULL, 
+	status VARCHAR(20) DEFAULT 'Active', 
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, 
+	PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS permissions (
+	id INTEGER NOT NULL AUTO_INCREMENT, 
+	name VARCHAR(255) NOT NULL, 
+	code VARCHAR(100) NOT NULL, 
+	resource_path VARCHAR(255), 
+	resource_type VARCHAR(50), 
+	parent_menu VARCHAR(255), 
+	icon VARCHAR(50), 
+	display_order INTEGER DEFAULT '0', 
+	description TEXT, 
+	status VARCHAR(20) DEFAULT 'Active', 
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, 
+	PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS roles (
+	id INTEGER NOT NULL AUTO_INCREMENT, 
+	code VARCHAR(50) NOT NULL, 
+	name VARCHAR(255) NOT NULL, 
+	description TEXT, 
+	status VARCHAR(20) DEFAULT 'Active', 
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, 
+	PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sms_providers (
+	id INTEGER NOT NULL AUTO_INCREMENT, 
+	code VARCHAR(50) NOT NULL, 
+	name VARCHAR(255) NOT NULL, 
+	type VARCHAR(50) DEFAULT 'Twilio', 
+	priority INTEGER DEFAULT '1', 
+	account_sid VARCHAR(255), 
+	auth_token VARCHAR(255), 
+	from_number VARCHAR(50), 
+	status VARCHAR(20) DEFAULT 'Active', 
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, 
+	PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sms_templates (
+	id INTEGER NOT NULL AUTO_INCREMENT, 
+	code VARCHAR(50) NOT NULL, 
+	name VARCHAR(255) NOT NULL, 
+	body TEXT NOT NULL, 
+	status VARCHAR(20) DEFAULT 'Active', 
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, 
+	PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS users (
+	id INTEGER NOT NULL AUTO_INCREMENT, 
+	username VARCHAR(50) NOT NULL, 
+	password VARCHAR(255) NOT NULL, 
+	name VARCHAR(100), 
+	`role` VARCHAR(50) DEFAULT 'User', 
+	status VARCHAR(20) DEFAULT 'Active', 
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, 
+	PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS whatsapp_providers (
+	id INTEGER NOT NULL AUTO_INCREMENT, 
+	code VARCHAR(50) NOT NULL, 
+	name VARCHAR(255) NOT NULL, 
+	type VARCHAR(50) DEFAULT 'Twilio', 
+	account_sid VARCHAR(255), 
+	auth_token VARCHAR(255), 
+	from_number VARCHAR(50), 
+	status VARCHAR(20) DEFAULT 'Active', 
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, 
+	PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS whatsapp_templates (
+	id INTEGER NOT NULL AUTO_INCREMENT, 
+	code VARCHAR(50) NOT NULL, 
+	name VARCHAR(255) NOT NULL, 
+	body TEXT NOT NULL, 
+	status VARCHAR(20) DEFAULT 'Active', 
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, 
+	PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS precincts (
+	id INTEGER NOT NULL AUTO_INCREMENT, 
+	county_id INTEGER, 
+	code VARCHAR(50) NOT NULL, 
+	name VARCHAR(255) NOT NULL, 
+	zipcode VARCHAR(20), 
+	status VARCHAR(20) DEFAULT 'Active', 
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, 
+	PRIMARY KEY (id), 
+	CONSTRAINT precincts_ibfk_1 FOREIGN KEY(county_id) REFERENCES counties (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS email_jobs (
+	id INTEGER NOT NULL AUTO_INCREMENT, 
+	precinct_id INTEGER, 
+	template_id INTEGER, 
+	provider_id VARCHAR(50), 
+	scheduled_at DATETIME, 
+	status VARCHAR(20) DEFAULT 'Pending', 
+	recipients INTEGER DEFAULT '0', 
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, 
+	PRIMARY KEY (id), 
+	CONSTRAINT email_jobs_ibfk_1 FOREIGN KEY(precinct_id) REFERENCES precincts (id), 
+	CONSTRAINT email_jobs_ibfk_2 FOREIGN KEY(template_id) REFERENCES email_templates (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS sms_jobs (
+	id INTEGER NOT NULL AUTO_INCREMENT, 
+	precinct_id INTEGER, 
+	template_id INTEGER, 
+	provider_id VARCHAR(50), 
+	scheduled_at DATETIME, 
+	status VARCHAR(20) DEFAULT 'Pending', 
+	recipients INTEGER DEFAULT '0', 
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, 
+	PRIMARY KEY (id), 
+	CONSTRAINT sms_jobs_ibfk_1 FOREIGN KEY(precinct_id) REFERENCES precincts (id), 
+	CONSTRAINT sms_jobs_ibfk_2 FOREIGN KEY(template_id) REFERENCES sms_templates (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS voters (
+	id INTEGER NOT NULL AUTO_INCREMENT, 
+	precinct_id INTEGER, 
+	first_name VARCHAR(100) NOT NULL, 
+	last_name VARCHAR(100) NOT NULL, 
+	email VARCHAR(255), 
+	phone VARCHAR(20), 
+	status VARCHAR(20) DEFAULT 'Active', 
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, 
+	PRIMARY KEY (id), 
+	CONSTRAINT voters_ibfk_1 FOREIGN KEY(precinct_id) REFERENCES precincts (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS whatsapp_jobs (
+	id INTEGER NOT NULL AUTO_INCREMENT, 
+	precinct_id INTEGER, 
+	template_id INTEGER, 
+	provider_id VARCHAR(50), 
+	scheduled_at DATETIME, 
+	status VARCHAR(20) DEFAULT 'Pending', 
+	recipients INTEGER DEFAULT '0', 
+	created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP, 
+	PRIMARY KEY (id), 
+	CONSTRAINT whatsapp_jobs_ibfk_1 FOREIGN KEY(precinct_id) REFERENCES precincts (id), 
+	CONSTRAINT whatsapp_jobs_ibfk_2 FOREIGN KEY(template_id) REFERENCES whatsapp_templates (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
