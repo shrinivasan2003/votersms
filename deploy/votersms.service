@@ -1,0 +1,27 @@
+[Unit]
+Description=VoterSMS FastAPI Backend
+After=network.target mariadb.service
+Requires=mariadb.service
+
+[Service]
+Type=exec
+# Runs as an unprivileged user, unlike the previous deployment which ran as
+# root. /opt/votersms must be owned by this user (it also writes uploads there).
+User=naveen
+Group=naveen
+WorkingDirectory=/opt/votersms/python_server
+EnvironmentFile=/opt/votersms/python_server/.env
+# Port 8002: this is a shared host — 8000 and 8001 are taken by other apps.
+# Keep in sync with the proxy_pass in the nginx site config.
+ExecStart=/opt/votersms/python_server/.venv/bin/uvicorn \
+    app.main:app \
+    --host 127.0.0.1 \
+    --port 8002 \
+    --workers 2
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
