@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BarChart2, Printer, Search, X, Calendar, ChevronDown, Eye } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
-import { smsDeliveryApi, smsJobsApi } from '../../api/sms';
+import { smsAnalyticsApi } from '../../api/sms';
 import { precinctsApi } from '../../api/voters';
 
 const SmsDeliveryReport = () => {
@@ -11,13 +11,6 @@ const SmsDeliveryReport = () => {
     precinct: 'All Precincts',
     dateFrom: '',
     dateTo: ''
-  });
-
-  const [stats, setStats] = useState({
-    total_jobs: 0,
-    sent: 0,
-    failed: 0,
-    pending: 0
   });
 
   const [reportData, setReportData] = useState([]);
@@ -30,12 +23,10 @@ const SmsDeliveryReport = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [statsData, jobsData, precinctsData] = await Promise.all([
-        smsDeliveryApi.stats(),
-        smsJobsApi.list(),
+      const [jobsData, precinctsData] = await Promise.all([
+        smsAnalyticsApi.list(),
         precinctsApi.list(),
       ]);
-      setStats(statsData || {});
       const data = Array.isArray(jobsData) ? jobsData : [];
       setReportData(data);
       setFilteredData(data);
@@ -94,14 +85,23 @@ const SmsDeliveryReport = () => {
     setFilteredData(reportData);
   };
 
+  // Summed from real per-job data — no separate, differently-scoped
+  // stats endpoint, so these always agree with the table below.
+  const totals = reportData.reduce((acc, r) => ({
+    recipients: acc.recipients + (r.recipients || 0),
+    sent:       acc.sent       + (r.sent || 0),
+    delivered:  acc.delivered  + (r.delivered || 0),
+    failed:     acc.failed     + (r.failed || 0),
+    pending:    acc.pending    + (r.pending || 0),
+  }), { recipients: 0, sent: 0, delivered: 0, failed: 0, pending: 0 });
+
   const statsList = [
-    { label: 'Total Jobs', value: stats.total_jobs || 0, color: 'bg-[#1a56db]' },
-    { label: 'Total Recipients', value: stats.total_jobs || 0, color: 'bg-[#2563eb]' },
-    { label: 'Sent', value: stats.sent || 0, color: 'bg-[#2ecc71]' },
-    { label: 'Delivered', value: '0', color: 'bg-[#10b981]' },
-    { label: 'Failed', value: stats.failed || 0, color: 'bg-[#e74c3c]' },
-    { label: 'Pending', value: stats.pending || 0, color: 'bg-[#f1c40f]' },
-    { label: 'Provider Name', value: 'Twilio', color: 'bg-[#9b59b6]' },
+    { label: 'Total Jobs', value: reportData.length, color: 'bg-[#1a56db]' },
+    { label: 'Total Recipients', value: totals.recipients, color: 'bg-[#2563eb]' },
+    { label: 'Sent', value: totals.sent, color: 'bg-[#2ecc71]' },
+    { label: 'Delivered', value: totals.delivered, color: 'bg-[#10b981]' },
+    { label: 'Failed', value: totals.failed, color: 'bg-[#e74c3c]' },
+    { label: 'Pending', value: totals.pending, color: 'bg-[#f1c40f]' },
   ];
 
   const columns = ['JOB ID', 'PRECINCT', 'TEMPLATE', 'PROVIDER', 'STATUS', 'TOTAL', 'SENT', 'DELIVERED', 'FAILED', 'PENDING', 'DELIVERY RATE', 'CREATED', 'ACTIONS'];
@@ -139,8 +139,8 @@ const SmsDeliveryReport = () => {
           .grid {
             display: grid !important;
           }
-          .grid-cols-7 {
-            grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+          .grid-cols-6 {
+            grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
           }
         }
         .print-header {
@@ -172,11 +172,11 @@ const SmsDeliveryReport = () => {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {statsList.map((stat, idx) => (
           <div key={idx} className={`${stat.color} rounded-lg p-5 text-white relative overflow-hidden shadow-sm`}>
             <p className="text-[10px] font-medium opacity-90 mb-1 uppercase tracking-wider">{stat.label}</p>
-            <p className={`text-xl font-bold ${stat.label === 'Provider Name' ? 'text-base' : ''}`}>{stat.value}</p>
+            <p className="text-xl font-bold">{stat.value}</p>
             <BarChart2 size={32} className="absolute top-2 right-2 opacity-20" />
           </div>
         ))}
@@ -310,10 +310,9 @@ const SmsDeliveryReport = () => {
                   <td className="px-6 py-4 text-sm text-brand-textPrimary font-medium max-w-xs truncate">{row.precinct_name}</td>
                   <td className="px-6 py-4 text-sm text-brand-textSecondary font-medium">{row.template_name}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex flex-col">
-                      <span className="bg-[#e0e7ff] text-[#4338ca] px-3 py-0.5 rounded-full text-[10px] font-bold w-fit mb-1">Twilio</span>
-                      <span className="text-[10px] text-gray-400 lowercase">{row.provider_name || 'twilio'}</span>
-                    </div>
+                    <span className="bg-[#e0e7ff] text-[#4338ca] px-3 py-0.5 rounded-full text-[10px] font-bold w-fit">
+                      {row.provider_name || '—'}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${row.status === 'Completed' ? 'bg-[#e6f7ef] text-[#27ae60]' : 'bg-yellow-50 text-yellow-600'}`}>
@@ -323,17 +322,29 @@ const SmsDeliveryReport = () => {
                   <td className="px-6 py-4 text-center text-sm font-bold text-brand-textPrimary">{row.recipients || 0}</td>
                   <td className="px-6 py-4 text-center whitespace-nowrap">
                     <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center mx-auto">
-                      <span className="text-xs font-bold text-brand-blue">{row.sent_count || 0}</span>
+                      <span className="text-xs font-bold text-brand-blue">{row.sent || 0}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-center text-sm text-gray-400">-</td>
+                  <td className="px-6 py-4 text-center whitespace-nowrap">
+                    {row.delivered != null ? (
+                      <div className="w-8 h-8 rounded-full bg-green-50 flex items-center justify-center mx-auto">
+                        <span className="text-xs font-bold text-[#10b981]">{row.delivered}</span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-400" title="Sent before per-recipient tracking was added">—</span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-center whitespace-nowrap">
                     <div className="w-8 h-8 rounded-full bg-red-50 flex items-center justify-center mx-auto">
-                      <span className="text-xs font-bold text-[#e74c3c]">{row.failed_count || 0}</span>
+                      <span className="text-xs font-bold text-[#e74c3c]">{row.failed || 0}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-center text-sm text-gray-400">-</td>
-                  <td className="px-6 py-4 text-center text-sm text-gray-400">-</td>
+                  <td className="px-6 py-4 text-center text-sm text-brand-textSecondary">
+                    {row.pending != null ? row.pending : <span className="text-gray-400" title="Sent before per-recipient tracking was added">—</span>}
+                  </td>
+                  <td className="px-6 py-4 text-center text-sm font-semibold text-brand-textSecondary">
+                    {row.delivery_rate != null ? `${row.delivery_rate}%` : <span className="text-gray-400 font-normal" title="Sent before per-recipient tracking was added">—</span>}
+                  </td>
                   <td className="px-6 py-4 text-sm text-brand-textSecondary font-medium whitespace-nowrap">{new Date(row.created_at).toLocaleDateString('en-GB')}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <button className="text-brand-blue hover:text-blue-700 transition-colors">
