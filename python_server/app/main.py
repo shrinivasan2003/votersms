@@ -34,7 +34,7 @@ from app.api import (
     email_jobs,
     whatsapp_templates,
     whatsapp_jobs,
-    sms_delivery_stats,
+    sms_analytics,
     process_jobs,
     email_webhooks,
     sms_webhooks,
@@ -222,7 +222,7 @@ app.include_router(users.router,              prefix="/api")
 app.include_router(email_jobs.router,         prefix="/api", dependencies=_protected)
 app.include_router(whatsapp_templates.router, prefix="/api", dependencies=_protected)
 app.include_router(whatsapp_jobs.router,      prefix="/api", dependencies=_protected)
-app.include_router(sms_delivery_stats.router, prefix="/api", dependencies=_protected)
+app.include_router(sms_analytics.router,      prefix="/api", dependencies=_protected)
 app.include_router(process_jobs.router,       prefix="/api", dependencies=_protected)
 app.include_router(email_analytics.router,    prefix="/api", dependencies=_protected)
 app.include_router(contact_lists.router,      prefix="/api", dependencies=_protected)

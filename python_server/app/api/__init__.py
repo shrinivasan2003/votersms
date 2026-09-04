@@ -16,5 +16,5 @@ from app.api import (
     email_jobs,
     whatsapp_templates,
     whatsapp_jobs,
-    sms_delivery_stats,
+    sms_analytics,
 )

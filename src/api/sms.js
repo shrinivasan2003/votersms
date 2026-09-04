@@ -21,8 +21,8 @@ export const smsJobsApi = {
   remove: (id)         => del(`/api/sms-jobs/${id}`),
 };
 
-export const smsDeliveryApi = {
-  stats: () => get('/api/sms-delivery-stats'),
+export const smsAnalyticsApi = {
+  list: () => get('/api/sms-analytics'),
 };
 
 function _qs(params) {
