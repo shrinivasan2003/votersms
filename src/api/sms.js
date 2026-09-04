@@ -23,6 +23,7 @@ export const smsJobsApi = {
 
 export const smsAnalyticsApi = {
   list: () => get('/api/sms-analytics'),
+  get: (jobId) => get(`/api/sms-analytics/${jobId}`),
 };
 
 function _qs(params) {

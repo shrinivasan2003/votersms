@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { BarChart2, Printer, Search, X, Calendar, ChevronDown, Eye } from 'lucide-react';
+import { BarChart2, Printer, Search, X, Calendar, ChevronDown, Eye, RefreshCw } from 'lucide-react';
 import Pagination from '../../components/shared/Pagination';
+import SmsAnalyticsModal from '../../components/shared/SmsAnalyticsModal';
 import { smsAnalyticsApi } from '../../api/sms';
 import { precinctsApi } from '../../api/voters';
 
@@ -17,6 +18,7 @@ const SmsDeliveryReport = () => {
   const [filteredData, setFilteredData] = useState([]);
   const [precincts, setPrecincts] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedJob, setSelectedJob] = useState(null);
   const [smsPage, setSmsPage]         = useState(1);
   const [smsPageSize, setSmsPageSize] = useState(10);
 
@@ -159,6 +161,26 @@ const SmsDeliveryReport = () => {
           .grid-cols-6 {
             grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
           }
+          /* Job-Wise Statistics has 13 columns — portrait width clips the
+             right-most ones with no way to scroll on a printed page.
+             Landscape + a smaller fixed-layout table + wrapping (instead
+             of nowrap) makes every column fit instead of being cut off. */
+          .overflow-x-auto {
+            overflow: visible !important;
+          }
+          table {
+            table-layout: fixed !important;
+            width: 100% !important;
+            font-size: 8px !important;
+          }
+          th, td {
+            padding: 4px 6px !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+          }
+        }
+        @page {
+          size: landscape;
         }
         .print-header {
           display: none;
@@ -174,13 +196,24 @@ const SmsDeliveryReport = () => {
           <h1 className="text-xl sm:text-2xl font-bold text-brand-navy">SMS Analytics</h1>
           <p className="text-sm text-brand-textMuted mt-1">View SMS job delivery statistics and recipient details</p>
         </div>
-        <button
-          onClick={handlePrint}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-brand-textPrimary hover:bg-gray-50 transition-colors shadow-sm"
-        >
-          <Printer size={18} />
-          Print Report
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchData}
+            disabled={loading}
+            title="Refresh"
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-brand-textPrimary hover:bg-gray-50 disabled:opacity-50 transition-colors shadow-sm"
+          >
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-brand-textPrimary hover:bg-gray-50 transition-colors shadow-sm"
+          >
+            <Printer size={18} />
+            Print Report
+          </button>
+        </div>
       </div>
 
       <div className="hidden print:block mb-6">
@@ -304,7 +337,7 @@ const SmsDeliveryReport = () => {
             <thead className="bg-gray-50">
               <tr>
                 {columns.map((head) => (
-                  <th key={head} className="px-6 py-4 text-left text-[10px] font-bold text-brand-textSecondary uppercase tracking-wider whitespace-nowrap">
+                  <th key={head} className={`px-6 py-4 text-left text-[10px] font-bold text-brand-textSecondary uppercase tracking-wider whitespace-nowrap ${head === 'ACTIONS' ? 'no-print' : ''}`}>
                     {head}
                   </th>
                 ))}
@@ -363,8 +396,12 @@ const SmsDeliveryReport = () => {
                     {row.delivery_rate != null ? `${row.delivery_rate}%` : <span className="text-gray-400 font-normal" title="Sent before per-recipient tracking was added">—</span>}
                   </td>
                   <td className="px-6 py-4 text-sm text-brand-textSecondary font-medium whitespace-nowrap">{new Date(row.created_at).toLocaleDateString('en-GB')}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <button className="text-brand-blue hover:text-blue-700 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap no-print">
+                    <button
+                      onClick={() => setSelectedJob(row)}
+                      className="text-brand-blue hover:text-blue-700 transition-colors"
+                      title="View detail"
+                    >
                       <Eye size={18} />
                     </button>
                   </td>
@@ -385,6 +422,10 @@ const SmsDeliveryReport = () => {
           </div>
         )}
       </div>
+
+      {selectedJob && (
+        <SmsAnalyticsModal job={selectedJob} onClose={() => setSelectedJob(null)} />
+      )}
 
     </div>
   );

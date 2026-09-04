@@ -153,6 +153,26 @@ const EmailDeliveryReport = () => {
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
           .grid { display: grid !important; }
           .grid-cols-7 { grid-template-columns: repeat(7, minmax(0, 1fr)) !important; }
+          /* Job-Wise Statistics has many columns — portrait width clips the
+             right-most ones with no way to scroll on a printed page.
+             Landscape + a smaller fixed-layout table + wrapping (instead
+             of nowrap) makes every column fit instead of being cut off. */
+          .overflow-x-auto {
+            overflow: visible !important;
+          }
+          table {
+            table-layout: fixed !important;
+            width: 100% !important;
+            font-size: 8px !important;
+          }
+          th, td {
+            padding: 4px 6px !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+          }
+        }
+        @page {
+          size: landscape;
         }
         .print-header { display: none; }
       `}</style>
