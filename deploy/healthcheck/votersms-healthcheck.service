@@ -1,0 +1,7 @@
+[Unit]
+Description=VoterSMS daily health check
+
+[Service]
+Type=oneshot
+User=naveen
+ExecStart=/bin/bash /opt/votersms/deploy/healthcheck/daily_healthcheck.sh

@@ -4,6 +4,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Request, Response
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -234,3 +235,28 @@ app.include_router(ai_generate.router,        prefix="/api", dependencies=_prote
 @app.get("/")
 def read_root():
     return {"message": "VoterSMS API"}
+
+
+@app.get("/api/health")
+def health_check():
+    """
+    Unauthenticated liveness/readiness check for external monitors and the
+    daily health-check script. Verifies the app process is up AND the
+    database is actually reachable — not just that uvicorn is running.
+    """
+    db_ok = False
+    db_error = None
+    try:
+        db = SessionLocal()
+        try:
+            db.execute(text("SELECT 1"))
+            db_ok = True
+        finally:
+            db.close()
+    except Exception as e:
+        db_error = str(e)
+
+    body = {"status": "ok" if db_ok else "degraded", "database": "ok" if db_ok else "unreachable"}
+    if db_error:
+        body["database_error"] = db_error
+    return JSONResponse(content=body, status_code=200 if db_ok else 503)
