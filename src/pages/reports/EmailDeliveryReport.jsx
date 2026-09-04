@@ -105,7 +105,26 @@ const EmailDeliveryReport = () => {
     setFilteredData(reportData);
   };
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    // The table is paginated on screen, so window.print() would otherwise
+    // only capture the current page of rows. Temporarily show every
+    // filtered row, print, then restore normal pagination once the print
+    // dialog closes.
+    const originalPage = analyticsPage;
+    const originalPageSize = analyticsPageSize;
+    setAnalyticsPage(1);
+    setAnalyticsPageSize(filteredData.length || 1);
+
+    const restore = () => {
+      setAnalyticsPage(originalPage);
+      setAnalyticsPageSize(originalPageSize);
+      window.removeEventListener('afterprint', restore);
+    };
+    window.addEventListener('afterprint', restore);
+
+    // Let React re-render the full list before the print dialog opens.
+    setTimeout(() => window.print(), 50);
+  };
 
   const columns = [
     'JOB ID', 'PRECINCT', 'TEMPLATE', 'PROVIDER',
@@ -431,7 +450,7 @@ const EmailDeliveryReport = () => {
           </table>
         </div>
         {filteredData.length > 0 && (
-          <div className="px-6 border-t border-brand-border bg-white">
+          <div className="px-6 border-t border-brand-border bg-white no-print">
             <Pagination
               page={analyticsPage}
               pageSize={analyticsPageSize}

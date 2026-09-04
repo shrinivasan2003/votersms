@@ -71,7 +71,24 @@ const SmsDeliveryReport = () => {
   };
 
   const handlePrint = () => {
-    window.print();
+    // The table is paginated on screen, so window.print() would otherwise
+    // only capture the current page of rows. Temporarily show every
+    // filtered row, print, then restore normal pagination once the print
+    // dialog closes.
+    const originalPage = smsPage;
+    const originalPageSize = smsPageSize;
+    setSmsPage(1);
+    setSmsPageSize(filteredData.length || 1);
+
+    const restore = () => {
+      setSmsPage(originalPage);
+      setSmsPageSize(originalPageSize);
+      window.removeEventListener('afterprint', restore);
+    };
+    window.addEventListener('afterprint', restore);
+
+    // Let React re-render the full list before the print dialog opens.
+    setTimeout(() => window.print(), 50);
   };
 
   const handleClear = () => {
@@ -357,7 +374,7 @@ const SmsDeliveryReport = () => {
           </table>
         </div>
         {filteredData.length > 0 && (
-          <div className="px-6 border-t border-brand-border bg-white">
+          <div className="px-6 border-t border-brand-border bg-white no-print">
             <Pagination
               page={smsPage}
               pageSize={smsPageSize}
