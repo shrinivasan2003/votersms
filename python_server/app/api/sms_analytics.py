@@ -83,3 +83,72 @@ def list_sms_analytics(
         if "doesn't exist" in err or "1146" in err:
             return []
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/sms-analytics/{job_id}")
+def get_sms_analytics_detail(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """
+    Per-recipient detail for one SMS job — powers the "view" button on
+    the SMS Analytics report, mirroring what the Eye button already does
+    for email jobs. Twilio only ever reports current status (queued ->
+    sent -> delivered/failed), not a full event history the way Postmark
+    does for email, so this shows one row per recipient with their
+    latest known status rather than an event feed.
+    """
+    cid = current_user.customer_id
+    job_row = db.execute(text("""
+        SELECT j.id, j.status, j.created_at, j.recipients,
+               j.success_count, j.failed_count,
+               p.name  AS precinct_name,
+               t.name  AS template_name,
+               pr.name AS provider_name
+        FROM sms_jobs j
+        LEFT JOIN precincts     p  ON j.precinct_id = p.id
+        LEFT JOIN sms_templates t  ON j.template_id = t.id
+        LEFT JOIN sms_providers pr ON j.provider_id = pr.id
+        WHERE j.id = :id AND (:cid IS NULL OR j.customer_id = :cid)
+    """), {"id": job_id, "cid": cid}).fetchone()
+    if not job_row:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job = dict(job_row._mapping)
+
+    messages = db.execute(text("""
+        SELECT sjm.id, sjm.recipient_phone, sjm.status, sjm.error_code,
+               sjm.error_message, sjm.sent_at, sjm.updated_at,
+               COALESCE(NULLIF(TRIM(CONCAT(v.first_name, ' ', COALESCE(v.last_name, ''))), ''), sjm.recipient_phone)
+                                                                        AS recipient_name
+        FROM sms_job_messages sjm
+        LEFT JOIN voters v ON sjm.voter_id = v.id
+        WHERE sjm.job_id = :id
+        ORDER BY sjm.id
+    """), {"id": job_id}).fetchall()
+    recipients = [dict(r._mapping) for r in messages]
+
+    total = len(recipients)
+    if total:
+        delivered = sum(1 for r in recipients if r["status"] == "delivered")
+        failed    = sum(1 for r in recipients if r["status"] in ("failed", "undelivered"))
+        pending   = sum(1 for r in recipients if r["status"] in ("queued", "sending", "sent"))
+        summary = {
+            "total_sent": total,
+            "delivered": delivered,
+            "failed": failed,
+            "pending": pending,
+            "delivery_rate": round(delivered / total * 100, 1),
+            "has_message_data": True,
+        }
+    else:
+        summary = {
+            "total_sent": job["success_count"] or 0,
+            "delivered": None,
+            "failed": job["failed_count"] or 0,
+            "pending": None,
+            "delivery_rate": None,
+            "has_message_data": False,
+        }
+
+    return {"job": job, "summary": summary, "recipients": recipients}
