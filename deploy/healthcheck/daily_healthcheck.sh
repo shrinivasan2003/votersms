@@ -15,7 +15,7 @@ set -uo pipefail   # not -e: we want to keep checking even if one check fails
 
 APP_DIR="/opt/votersms/python_server"
 DOMAIN="outreach.ballotda.com"
-ALERT_EMAIL="naveenk@ballotda.com,suria@ballotda.com"
+ALERT_EMAIL="naveenk@ballotda.com,shobana@sonline.us"
 
 envval() {
     grep -m1 "^$1=" "$APP_DIR/.env" | cut -d'=' -f2- | tr -d '"' | tr -d "'" \
@@ -23,9 +23,17 @@ envval() {
 }
 POSTMARK_API_KEY=$(envval POSTMARK_API_KEY)
 SENDER_EMAIL=$(envval POSTMARK_SENDER_EMAIL)
+DB_USER=$(envval DB_USER)
+DB_PASS=$(envval DB_PASS)
+DB_NAME=$(envval DB_NAME)
 
 REPORT=""
 OVERALL_OK=1
+FRONTEND_OK=0
+BACKEND_OK=0
+SERVICES_OK=1
+DAYS_LEFT=""
+DISK_PCT=""
 add() { REPORT="${REPORT}$1
 "; }
 
@@ -43,6 +51,7 @@ add ""
 FRONTEND_CODE=$(curl -s -o /dev/null -m 10 -w "%{http_code}" "https://${DOMAIN}/")
 if [[ "$FRONTEND_CODE" == "200" ]]; then
     add "✅ Frontend: OK (HTTP $FRONTEND_CODE)"
+    FRONTEND_OK=1
 else
     add "❌ Frontend: FAILED (HTTP $FRONTEND_CODE)"
     OVERALL_OK=0
@@ -54,6 +63,7 @@ HEALTH_CODE=$(echo "$HEALTH_RESPONSE" | tail -1)
 HEALTH_BODY=$(echo "$HEALTH_RESPONSE" | sed '$d')
 if [[ "$HEALTH_CODE" == "200" ]]; then
     add "✅ Backend + Database: OK"
+    BACKEND_OK=1
 else
     add "❌ Backend + Database: FAILED (HTTP $HEALTH_CODE) — $HEALTH_BODY"
     OVERALL_OK=0
@@ -80,6 +90,7 @@ for svc in votersms nginx mariadb; do
     else
         add "❌ Service $svc: NOT running"
         OVERALL_OK=0
+        SERVICES_OK=0
     fi
 done
 
@@ -99,6 +110,34 @@ if [[ $OVERALL_OK -eq 1 ]]; then
 else
     add "Overall: ATTENTION NEEDED — see failures above"
     SUBJECT="⚠️ VoterSMS Daily Health Check — Action Needed"
+fi
+
+# ── Save to the database, for the Super Admin > Health dashboard page ───
+# Inserted via the app's own venv (pymysql), independent of whether the
+# app process itself is healthy right now — same reasoning as sending
+# via Postmark's API directly rather than through the app. Uses a real
+# parameterized query rather than hand-built SQL strings, so the report
+# text (which can contain quotes, backslashes, emoji) is always safe.
+if [[ -n "$DB_PASS" ]]; then
+    "$APP_DIR/.venv/bin/python3" -c "
+import sys, pymysql
+db_user, db_pass, db_name, overall_ok, frontend_ok, backend_ok, services_ok, days_left, disk_pct, report = sys.argv[1:]
+conn = pymysql.connect(host='localhost', user=db_user, password=db_pass, database=db_name, charset='utf8mb4')
+try:
+    with conn.cursor() as cur:
+        cur.execute(
+            'INSERT INTO health_check_reports '
+            '(checked_at, overall_ok, frontend_ok, backend_ok, services_ok, ssl_days_left, disk_pct, report_text) '
+            'VALUES (UTC_TIMESTAMP(), %s, %s, %s, %s, %s, %s, %s)',
+            (overall_ok, frontend_ok, backend_ok, services_ok, days_left or None, disk_pct or None, report),
+        )
+    conn.commit()
+    print('health_check_reports: saved')
+except Exception as e:
+    print(f'health_check_reports: insert failed: {e}')
+finally:
+    conn.close()
+" "$DB_USER" "$DB_PASS" "$DB_NAME" "$OVERALL_OK" "$FRONTEND_OK" "$BACKEND_OK" "$SERVICES_OK" "${DAYS_LEFT:-}" "${DISK_PCT:-}" "$REPORT"
 fi
 
 # ── Send via Postmark API directly (independent of the app) ─────────────

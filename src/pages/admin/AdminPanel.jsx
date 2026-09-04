@@ -5,9 +5,10 @@ import {
   Building2, Mail, UserPlus, Activity, Trash2, PowerOff,
   CheckCircle, XCircle, Power, Settings, Send, PauseCircle,
   LogOut, ChevronRight, Users, BarChart3, Database, SlidersHorizontal, X,
-  ClipboardList, Menu, Sparkles, Info, Pencil, Check, RefreshCw,
+  ClipboardList, Menu, Sparkles, Info, Pencil, Check, RefreshCw, HeartPulse,
 } from 'lucide-react';
 import AuditLog from './AuditLog';
+import Health from './Health';
 import SliderCaptcha from '../../components/shared/SliderCaptcha';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../hooks/useToast';
@@ -934,6 +935,7 @@ const AdminPanel = () => {
     { key: 'monitor',  label: 'Monitor Accounts', Icon: Activity      },
     { key: 'audit',    label: 'Audit Log',        Icon: ClipboardList },
     { key: 'ai',       label: 'AI Usage',         Icon: Sparkles      },
+    { key: 'health',   label: 'Health',           Icon: HeartPulse    },
     { key: 'settings', label: 'Settings',         Icon: Settings      },
   ];
 
@@ -1116,6 +1118,7 @@ const AdminPanel = () => {
             {tab === 'monitor'  && <MonitorAccountsTab />}
             {tab === 'audit'    && <AuditLog />}
             {tab === 'ai'       && <AIUsageTab />}
+            {tab === 'health'   && <Health />}
             {tab === 'settings' && <MasterSettingsTab />}
           </div>
         </main>

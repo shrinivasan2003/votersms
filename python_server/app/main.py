@@ -45,6 +45,7 @@ from app.api import (
     customers,
     customer_limits,
     audit_log,
+    health_reports,
     ai_generate,
 )
 from app.dependencies.security import get_current_user
@@ -229,6 +230,7 @@ app.include_router(list_meta_tags.router,     prefix="/api", dependencies=_prote
 app.include_router(customers.router,          prefix="/api", dependencies=_protected)
 app.include_router(customer_limits.router,    prefix="/api", dependencies=_protected)
 app.include_router(audit_log.router,          prefix="/api", dependencies=_protected)
+app.include_router(health_reports.router,     prefix="/api", dependencies=_protected)
 app.include_router(ai_generate.router,        prefix="/api", dependencies=_protected)
 
 # Root
