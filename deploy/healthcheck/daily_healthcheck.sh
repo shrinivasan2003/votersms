@@ -15,7 +15,7 @@ set -uo pipefail   # not -e: we want to keep checking even if one check fails
 
 APP_DIR="/opt/votersms/python_server"
 DOMAIN="outreach.ballotda.com"
-ALERT_EMAIL="naveenk@ballotda.com"
+ALERT_EMAIL="naveenk@ballotda.com,suria@ballotda.com"
 
 envval() {
     grep -m1 "^$1=" "$APP_DIR/.env" | cut -d'=' -f2- | tr -d '"' | tr -d "'" \
@@ -29,8 +29,14 @@ OVERALL_OK=1
 add() { REPORT="${REPORT}$1
 "; }
 
-add "VoterSMS Daily Health Check — $(date -u '+%Y-%m-%d %H:%M UTC')"
+add "VoterSMS (Outreach Platform) — Daily Health Check"
+add "$(date -u '+%Y-%m-%d %H:%M UTC')"
 add "================================================================"
+add ""
+add "This automated check was configured by Naveen (Developer) to give"
+add "the admin team direct visibility into the platform's health — no"
+add "manual login or server access required, delivered straight to your"
+add "inbox each morning."
 add ""
 
 # ── Frontend ──────────────────────────────────────────────────────────────
